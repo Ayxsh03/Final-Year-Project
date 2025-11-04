@@ -1,0 +1,47 @@
+services:
+  # postgres:
+  #   image: postgres:15
+  #   environment:
+  #     POSTGRES_DB: detection_db
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password
+  #     IMAGES_DIR: /app/images  
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./database/schema.sql:/docker-entrypoint-initdb.d/init.sql
+  #     - ./images:/app/images
+
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # DATABASE_URL: "postgresql://postgres:password@postgres:5432/detection_db" 
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:1KL72HcfqnFmpYEX@db.czwkrupnyvfwmkrvkmel.supabase.co:5432/postgres?sslmode=require}
+      DB_SSL_DISABLE_VERIFY: ${DB_SSL_DISABLE_VERIFY:-false}
+      API_KEY: ${API_KEY:-111-1111-1-11-1-11-1-1}
+      IMAGES_DIR: /app/images  
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
+    volumes:
+      - ./backend:/app  
+      - ./logs:/app/logs
+      - ./images:/app/images 
+    restart: unless-stopped
+
+# volumes:
+#   postgres_data:
+

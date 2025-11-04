@@ -1,0 +1,10 @@
+# This is a placeholder for the notification chime sound file.
+# Replace this file with an actual MP3 audio file for the notification sound.
+# The file should be a short chime or beep sound (1-2 seconds).
+# 
+# You can:
+# 1. Download a free notification sound from freesound.org
+# 2. Record your own chime sound
+# 3. Use a text-to-speech service to generate a simple beep
+# 4. Use the fallback audio generation in the NotificationContext (already implemented)
+
