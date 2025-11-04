@@ -12,4 +12,4 @@ cd "$HOME/site/wwwroot"
 export IMAGES_DIR=${IMAGES_DIR:-/home/images}
 
 # Start the worker
-exec python3 -u detection_integration/detection_integration.py
+exec python3 -u detection_integration/multi_camera_detector.py
