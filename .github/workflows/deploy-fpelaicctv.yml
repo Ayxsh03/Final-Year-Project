@@ -41,6 +41,13 @@ jobs:
           rm -rf backend/static || true
           mkdir -p backend/static
           cp -r dist/* backend/static/
+          echo "Verifying frontend files copied:"
+          ls -la backend/static/
+          if [ ! -f "backend/static/index.html" ]; then
+            echo "ERROR: index.html not found in backend/static!"
+            exit 1
+          fi
+          echo "✓ Frontend build verified"
 
       # --- Make WebJob script executable (optional) ---
       - name: Make WebJob script executable

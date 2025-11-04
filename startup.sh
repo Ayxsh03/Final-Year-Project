@@ -6,6 +6,7 @@ set -u
 echo "========================================"
 echo "FpelAICCTV Startup Script"
 echo "Time: $(date)"
+echo "PWD: $(pwd)"
 echo "========================================"
 
 # Create directories
@@ -13,10 +14,24 @@ echo "Creating directories..."
 mkdir -p /home/images 2>&1 || echo "Warning: Could not create /home/images"
 mkdir -p /home/logs 2>&1 || echo "Warning: Could not create /home/logs"
 
-# Navigate to app root
-echo "Navigating to /home/site/wwwroot..."
-cd /home/site/wwwroot || {
-    echo "FATAL: Cannot access /home/site/wwwroot"
+# Detect app root - Oryx may extract to /tmp or /home/site/wwwroot
+if [ -d "/home/site/wwwroot/backend" ]; then
+    APP_ROOT="/home/site/wwwroot"
+    echo "Using standard path: $APP_ROOT"
+elif [ -d "./backend" ]; then
+    APP_ROOT="$(pwd)"
+    echo "Using current directory: $APP_ROOT"
+else
+    # Last resort - find where backend is
+    APP_ROOT=$(find /tmp -name "backend" -type d 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+    if [ -z "$APP_ROOT" ]; then
+        APP_ROOT="/home/site/wwwroot"
+    fi
+    echo "Detected app root: $APP_ROOT"
+fi
+
+cd "$APP_ROOT" || {
+    echo "FATAL: Cannot access $APP_ROOT"
     exit 1
 }
 
@@ -27,9 +42,9 @@ ls -la | head -20
 # Set environment variables
 echo "Setting environment variables..."
 export IMAGES_DIR=${IMAGES_DIR:-/home/images}
-export STATIC_DIR=${STATIC_DIR:-/home/site/wwwroot/backend/static}
+export STATIC_DIR=${STATIC_DIR:-$APP_ROOT/backend/static}
 export PYTHONUNBUFFERED=1
-export PYTHONPATH=/home/site/wwwroot
+export PYTHONPATH=$APP_ROOT
 
 # Check critical files
 echo "Checking critical files..."
