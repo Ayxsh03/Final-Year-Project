@@ -25,7 +25,23 @@ IMAGES_DIR = os.getenv("IMAGES_DIR", "/home/images")
 os.makedirs(IMAGES_DIR, exist_ok=True)
 app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 
-STATIC_DIR = os.getenv("STATIC_DIR", "backend/static")
+# For Azure deployment, paths change. Check multiple possible locations.
+STATIC_DIR = os.getenv("STATIC_DIR")
+if not STATIC_DIR:
+    # Try common deployment paths
+    possible_paths = [
+        "/home/site/wwwroot/backend/static",
+        "backend/static",
+        "static"
+    ]
+    for path in possible_paths:
+        if os.path.isdir(path):
+            STATIC_DIR = path
+            break
+    if not STATIC_DIR:
+        STATIC_DIR = "backend/static"
+        os.makedirs(STATIC_DIR, exist_ok=True)
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # ---- CORS --------------------------------------------------------------------

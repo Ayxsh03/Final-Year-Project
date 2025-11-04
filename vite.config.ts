@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    outDir: "backend/static",
+    outDir: "dist",
     emptyOutDir: true,       
   },
 }));

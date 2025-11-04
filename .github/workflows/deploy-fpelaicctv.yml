@@ -61,7 +61,9 @@ jobs:
       # --- Create deployable ZIP ---
       - name: Create deployable package
         run: |
-          zip -r site.zip . -x "node_modules/*" ".git/*" ".github/*"
+          chmod +x startup.sh
+          chmod +x App_Data/jobs/continuous/detection/run.sh || true
+          zip -r site.zip . -x "node_modules/*" ".git/*" ".github/*" "dist/*" "*.log" "*.DS_Store"
 
       # --- Deploy to Azure Web App ---
       - name: Deploy to Azure Web App
@@ -69,3 +71,5 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ env.PUBLISH_PROFILE }}
+          package: site.zip
+          startup-command: 'bash startup.sh'
