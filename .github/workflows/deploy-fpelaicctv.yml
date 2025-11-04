@@ -1,28 +1,35 @@
-name: Build and deploy to Azure App Service (Python + WebJob)
+name: Build and Deploy FpelAICCTV
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: fpelaicctv-deploy
+  cancel-in-progress: true
+
 env:
-  PYTHON_VERSION: "3.10"
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
   AZURE_WEBAPP_NAME: "FpelAICCTV"
-  PUBLISH_PROFILE: ${{ secrets.AZURE_PUBLISH_PROFILE }}  # set this secret in GitHub (from Portal > Get publish profile)
+  PUBLISH_PROFILE: ${{ secrets.AZURE_PUBLISH_PROFILE }}
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # --- Checkout code ---
       - name: Checkout
         uses: actions/checkout@v4
 
-      # --- Build frontend with Node/Vite ---
+      # --- Build frontend ---
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Install & build frontend
         run: |
           npm ci
@@ -35,28 +42,30 @@ jobs:
           mkdir -p backend/static
           cp -r dist/* backend/static/
 
-      # --- (Optional) ensure WebJob script is executable ---
+      # --- Make WebJob script executable (optional) ---
       - name: Make WebJob script executable
         run: |
-          chmod +x App_Data/jobs/continuous/detection/run.sh
+          chmod +x App_Data/jobs/continuous/detection/run.sh || true
 
-      # --- Python build (if you want to pre-validate) ---
+      # --- Python setup & validation ---
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Validate requirements
+
+      - name: Validate Python requirements
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # --- Zip & Deploy to Web App ---
+      # --- Create deployable ZIP ---
       - name: Create deployable package
         run: |
           zip -r site.zip . -x "node_modules/*" ".git/*" ".github/*"
+
+      # --- Deploy to Azure Web App ---
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ env.PUBLISH_PROFILE }}
-          package: site.zip
