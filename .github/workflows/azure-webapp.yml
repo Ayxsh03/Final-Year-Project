@@ -1,0 +1,62 @@
+name: Build and deploy to Azure App Service (Python + WebJob)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.10"
+  AZURE_WEBAPP_NAME: "FpelAICCTV"
+  PUBLISH_PROFILE: ${{ secrets.AZURE_PUBLISH_PROFILE }}  # set this secret in GitHub (from Portal > Get publish profile)
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --- Build frontend with Node/Vite ---
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install & build frontend
+        run: |
+          npm ci
+          npm run build
+
+      # --- Stage frontend into backend/static ---
+      - name: Stage static site into backend/static
+        run: |
+          rm -rf backend/static || true
+          mkdir -p backend/static
+          cp -r dist/* backend/static/
+
+      # --- (Optional) ensure WebJob script is executable ---
+      - name: Make WebJob script executable
+        run: |
+          chmod +x App_Data/jobs/continuous/detection/run.sh
+
+      # --- Python build (if you want to pre-validate) ---
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Validate requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # --- Zip & Deploy to Web App ---
+      - name: Create deployable package
+        run: |
+          zip -r site.zip . -x "node_modules/*" ".git/*" ".github/*"
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ env.PUBLISH_PROFILE }}
+          package: site.zip

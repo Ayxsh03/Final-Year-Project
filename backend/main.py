@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import asyncpg
 import json
 from datetime import datetime, timedelta
@@ -13,9 +14,12 @@ import uuid
 
 app = FastAPI(title="Person Detection API", version="1.0.0")
 
-IMAGES_DIR = os.getenv("IMAGES_DIR", "absolute/path/to/shared/images") 
+IMAGES_DIR = os.getenv("IMAGES_DIR", "/home/images") 
 os.makedirs(IMAGES_DIR, exist_ok=True)
 app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
+
+STATIC_DIR = os.getenv("STATIC_DIR", "backend/static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # CORS middleware
 ALLOWED_ORIGINS = os.getenv(
@@ -1926,7 +1930,23 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.now()}
 
+@app.get("/", include_in_schema=False)
+def serve_root():
+    index_file = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return {"message": "Frontend not built yet. Run Vite build and copy into backend/static."}
 
+# SPA fallback: any non-API/non-static path returns index.html
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa_fallback(full_path: str):
+    # let real API/static routes handle themselves
+    if full_path.startswith(("api/", "images/", "static/")):
+        raise HTTPException(status_code=404, detail="Not Found")
+    index_file = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    raise HTTPException(status_code=404, detail="Frontend not built")
 
 if __name__ == "__main__":
     import uvicorn
