@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
 
-# Prevent overlapping deploys for the same branch (kills the older run)
 concurrency:
   group: fpelaicctv-${{ github.ref }}
   cancel-in-progress: true
@@ -19,11 +18,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install deps (optional for build-time checks)
+      - name: Install deps (optional)
         run: |
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # Package your app (adjust the paths to match your repo layout)
       - name: Create ZIP package
         run: |
           zip -r python-app.zip . -x ".git/*" ".github/*"
@@ -43,9 +41,8 @@ jobs:
           path: .
 
       - name: Deploy to Azure Web App
-        id: deploy
         uses: azure/webapps-deploy@v3
         with:
-          app-name: FpelAICCTV
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          app-name: FpelAICCTV                   # your web app name (case sensitive)
           package: python-app.zip
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
