@@ -1,58 +1,73 @@
 #!/usr/bin/env bash
-set -euo pipefail
+
+# Don't exit on error immediately - we want to log issues
+set -u
 
 echo "========================================"
-echo "Starting FpelAICCTV Azure Deployment"
+echo "FpelAICCTV Startup Script"
+echo "Time: $(date)"
 echo "========================================"
 
-# Create necessary directories with proper permissions
-mkdir -p /home/images
-mkdir -p /home/logs
-chmod 755 /home/images
-chmod 755 /home/logs
+# Create directories
+echo "Creating directories..."
+mkdir -p /home/images 2>&1 || echo "Warning: Could not create /home/images"
+mkdir -p /home/logs 2>&1 || echo "Warning: Could not create /home/logs"
 
-# Navigate to the application root
-cd /home/site/wwwroot
+# Navigate to app root
+echo "Navigating to /home/site/wwwroot..."
+cd /home/site/wwwroot || {
+    echo "FATAL: Cannot access /home/site/wwwroot"
+    exit 1
+}
 
-# Export environment variables with defaults
+echo "Current directory: $(pwd)"
+echo "Directory contents:"
+ls -la | head -20
+
+# Set environment variables
+echo "Setting environment variables..."
 export IMAGES_DIR=${IMAGES_DIR:-/home/images}
 export STATIC_DIR=${STATIC_DIR:-/home/site/wwwroot/backend/static}
 export PYTHONUNBUFFERED=1
-export PYTHONPATH=/home/site/wwwroot:$PYTHONPATH
+export PYTHONPATH=/home/site/wwwroot
 
-# Verify critical files exist
-echo "Verifying deployment files..."
-if [ ! -f "backend/main.py" ]; then
-    echo "ERROR: backend/main.py not found!"
+# Check critical files
+echo "Checking critical files..."
+if [ -f "backend/main.py" ]; then
+    echo "✓ backend/main.py found"
+else
+    echo "✗ ERROR: backend/main.py not found!"
+    echo "Listing backend directory:"
+    ls -la backend/ 2>&1 || echo "backend/ directory not found"
     exit 1
 fi
 
-if [ ! -f "yolov8n.pt" ]; then
-    echo "WARNING: yolov8n.pt not found at root. Checking detection_integration/"
-    if [ -f "detection_integration/yolov8n.pt" ]; then
-        echo "Copying YOLO model to root directory..."
-        cp detection_integration/yolov8n.pt .
-    else
-        echo "ERROR: yolov8n.pt not found in either location!"
-        echo "Detection system may not work properly."
-    fi
-fi
-
-if [ ! -d "backend/static" ]; then
-    echo "WARNING: backend/static directory not found. Frontend may not load."
-fi
-
-# Install Python dependencies if not already done
 if [ -f "requirements.txt" ]; then
-    echo "Ensuring Python dependencies are installed..."
-    pip install --no-cache-dir -r requirements.txt > /home/logs/pip-install.log 2>&1
-    echo "Dependencies installed."
+    echo "✓ requirements.txt found"
+else
+    echo "✗ WARNING: requirements.txt not found"
 fi
 
-echo "Environment configured successfully."
-echo "Starting FastAPI application on port 8000..."
+if [ -d "backend/static" ]; then
+    echo "✓ backend/static directory found"
+    echo "Static files count: $(find backend/static -type f 2>/dev/null | wc -l)"
+else
+    echo "✗ WARNING: backend/static not found - frontend may not load"
+fi
+
+# Check Python
+echo "Checking Python..."
+which python || which python3 || {
+    echo "ERROR: Python not found!"
+    exit 1
+}
+python --version 2>&1 || python3 --version 2>&1
+
+# Try to start the app
+echo "========================================"
+echo "Starting FastAPI application..."
+echo "Command: python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000"
 echo "========================================"
 
-# Start the FastAPI application
-# Azure App Service expects the main process to run in foreground
-exec python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 1
+# Start uvicorn - let it handle errors
+exec python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --log-level info
