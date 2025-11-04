@@ -65,7 +65,7 @@ jobs:
           chmod +x App_Data/jobs/continuous/detection/run.sh || true
           zip -r site.zip . -x "node_modules/*" ".git/*" ".github/*" "dist/*" "*.log" "*.DS_Store"
 
-      # --- Deploy to Azure Web App ---
+      # --- Deploy to Azure Web App --- 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
