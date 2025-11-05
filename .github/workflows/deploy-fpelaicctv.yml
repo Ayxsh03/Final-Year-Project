@@ -70,6 +70,8 @@ jobs:
         run: |
           chmod +x startup.sh
           chmod +x App_Data/jobs/continuous/detection/run.sh || true
+          # Touch requirements.txt to force Oryx rebuild
+          touch requirements.txt
           zip -r site.zip . -x "node_modules/*" ".git/*" ".github/*" "dist/*" "*.log" "*.DS_Store"
 
       # --- Deploy to Azure Web App --- 

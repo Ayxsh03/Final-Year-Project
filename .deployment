@@ -1,0 +1,2 @@
+# Force Azure Oryx to rebuild Python environment
+# This file tells Azure to do a fresh install of requirements.txt

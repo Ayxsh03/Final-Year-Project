@@ -83,6 +83,18 @@ echo "Ensuring OpenCV headless is installed..."
 python -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || true
 python -m pip uninstall -y opencv-python opencv-contrib-python >/dev/null 2>&1 || true
 python -m pip install --no-cache-dir opencv-python-headless==4.10.0.84 >/dev/null 2>&1 || true
+
+# Verify cv2 import works
+echo "Testing cv2 import..."
+python -c "import cv2; print(f'OpenCV {cv2.__version__} imported successfully')" || {
+    echo "❌ cv2 import failed, attempting reinstall..."
+    python -m pip install --force-reinstall --no-cache-dir opencv-python-headless==4.10.0.84
+    python -c "import cv2; print(f'OpenCV {cv2.__version__} imported successfully')" || {
+        echo "❌ FATAL: Cannot import cv2 after reinstall"
+        exit 1
+    }
+}
+
 echo "OpenCV packages:"
 python -m pip list | grep -i opencv || true
 
