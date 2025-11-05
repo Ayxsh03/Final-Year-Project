@@ -26,6 +26,9 @@ dist/
 build/
 *.egg
 
+# IMPORTANT: backend/static is populated by CI/CD from dist/
+# Do NOT gitignore backend/static during deployment
+
 # IDE
 .vscode/
 .idea/

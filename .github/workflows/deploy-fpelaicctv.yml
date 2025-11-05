@@ -48,6 +48,8 @@ jobs:
             exit 1
           fi
           echo "✓ Frontend build verified"
+          echo "Files in backend/static:"
+          find backend/static -type f | head -20
 
       # --- Make WebJob script executable (optional) ---
       - name: Make WebJob script executable
@@ -72,7 +74,12 @@ jobs:
           chmod +x App_Data/jobs/continuous/detection/run.sh || true
           # Touch requirements.txt to force Oryx rebuild
           touch requirements.txt
-          zip -r site.zip . -x "node_modules/*" ".git/*" ".github/*" "dist/*" "*.log" "*.DS_Store"
+          # Verify backend/static exists before zipping
+          echo "Checking backend/static before deployment:"
+          ls -la backend/static/ || echo "WARNING: backend/static is empty!"
+          # Create deployment package (exclude source files, keep backend/static)
+          zip -r site.zip . -x "node_modules/*" ".git/*" ".github/*" "dist/*" "src/*" "*.log" "*.DS_Store"
+          echo "✓ Deployment package created with backend/static included"
 
       # --- Deploy to Azure Web App --- 
       - name: Deploy to Azure Web App
