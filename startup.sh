@@ -78,6 +78,14 @@ which python || which python3 || {
 }
 python --version 2>&1 || python3 --version 2>&1
 
+# Enforce headless OpenCV to avoid libGL errors on Azure
+echo "Ensuring OpenCV headless is installed..."
+python -m pip install --upgrade pip setuptools wheel >/dev/null 2>&1 || true
+python -m pip uninstall -y opencv-python opencv-contrib-python >/dev/null 2>&1 || true
+python -m pip install --no-cache-dir opencv-python-headless==4.10.0.84 >/dev/null 2>&1 || true
+echo "OpenCV packages:"
+python -m pip list | grep -i opencv || true
+
 # Try to start the app
 echo "========================================"
 echo "Starting FastAPI application..."

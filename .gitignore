@@ -1,3 +1,76 @@
-DEPLOY_CHECKLIST.md
-DEPLOYMENT_COMPLETE_GUIDE.md
-AZURE_DEPLOYMENT.md
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+*.egg-info/
+dist-python/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+backend/logs/
+
+# Images & media
+backend/images/
+images/
+*.jpg
+*.png
+*.jpeg
+*.mp4
+*.avi
+
+# Model files (too large)
+*.pt
+!yolov8n.pt
+
+# Deployment artifacts
+app.zip
+site.zip
+output.tar.gz
+oryx-manifest.toml
+.ostype
+
+# Azure
+App_Data/jobs/*/logs/
+
+# Misc
+*.bak
+*.tmp
+.coverage
+.cache

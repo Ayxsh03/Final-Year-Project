@@ -45,4 +45,4 @@ echo "========================================"
 
 # Start the detection worker
 # -u flag ensures unbuffered output for logging
-exec python3 -u detection_integration/multi_camera_detector.py
+exec python -u detection_integration/multi_camera_detector.py
