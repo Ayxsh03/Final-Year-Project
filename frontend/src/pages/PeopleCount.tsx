@@ -145,12 +145,12 @@ const PeopleCount = () => {
                   <div className="w-16 h-12 bg-muted rounded overflow-hidden">
                     {item.image_path ? (
                       <img 
-                        src={`http://localhost:8000/images/${item.image_path}`}
+                        src={`/images/${item.image_path}`}
                         alt="Count snapshot"
                         className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => {
                           // Open image in new tab
-                          window.open(`http://localhost:8000/images/${item.image_path}`, '_blank');
+                          window.open(`/images/${item.image_path}`, '_blank');
                         }}
                         onError={(e) => {
                           // Fallback if image fails to load

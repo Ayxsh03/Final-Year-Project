@@ -23,10 +23,12 @@ const CameraFeed = ({ camera, index, demoMode }: { camera: any; index: number; d
 
   // Set up stream URL when camera is available or in demo mode
   useEffect(() => {
+    const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || '/api/v1';
+    const base = API_BASE.replace(/\/$/, '');
     if (demoMode) {
-      setStreamUrl(`http://localhost:8000/api/v1/stream/demo`);
+      setStreamUrl(`${base}/stream/demo`);
     } else {
-      setStreamUrl(`http://localhost:8000/api/v1/stream/${camera.id}`);
+      setStreamUrl(`${base}/stream/${camera.id}`);
     }
   }, [camera.id, camera.status, demoMode]);
 
