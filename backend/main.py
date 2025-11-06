@@ -43,6 +43,8 @@ if not STATIC_DIR:
         os.makedirs(STATIC_DIR, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Serve built asset files at /assets so module scripts resolve with correct MIME type
+app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="assets")
 
 # ---- CORS --------------------------------------------------------------------
 ALLOWED_ORIGINS = os.getenv(
