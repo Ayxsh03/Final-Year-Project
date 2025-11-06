@@ -99,6 +99,13 @@ jobs:
           unzip -l site.zip | grep -E "(startup.sh|backend/static|backend/main.py|requirements.txt)" || echo "ERROR: Missing critical files!"
           echo "Package size:"
           ls -lh site.zip
+      
+      - name: Clean Azure wwwroot before deployment
+        run: |
+          echo "Attempting to clean old deployment files..."
+          # This uses the publish profile to authenticate
+          # The clean: true flag in deploy step should handle this, but we're being explicit
+          echo "Clean flag will be handled by azure/webapps-deploy@v3"
 
       # --- Deploy to Azure Web App --- 
       - name: Deploy to Azure Web App
@@ -107,3 +114,4 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ env.PUBLISH_PROFILE }}
           package: site.zip
+          clean: true
