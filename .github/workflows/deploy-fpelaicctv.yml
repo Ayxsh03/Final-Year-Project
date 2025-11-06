@@ -113,8 +113,8 @@ jobs:
         run: |
           # Extract username and password from publish profile
           PROFILE='${{ env.PUBLISH_PROFILE }}'
-          USERNAME=$(echo "$PROFILE" | grep -oP 'userName="[^"]*"' | head -1 | cut -d'"' -f2)
-          PASSWORD=$(echo "$PROFILE" | grep -oP 'userPWD="[^"]*"' | head -1 | cut -d'"' -f2)
+          USERNAME=$(echo "$PROFILE" | sed -n 's/.*userName="\([^"]*\)".*/\1/p' | head -1)
+          PASSWORD=$(echo "$PROFILE" | sed -n 's/.*userPWD="\([^"]*\)".*/\1/p' | head -1)
           echo "::add-mask::$PASSWORD"
           echo "username=$USERNAME" >> $GITHUB_OUTPUT
           echo "password=$PASSWORD" >> $GITHUB_OUTPUT
@@ -122,13 +122,27 @@ jobs:
       - name: Deploy via Kudu ZipDeploy API
         run: |
           echo "Deploying to Azure via Kudu API..."
-          curl -X POST \
+          RESPONSE=$(curl -X POST \
             -u "${{ steps.publish-profile.outputs.username }}:${{ steps.publish-profile.outputs.password }}" \
             --data-binary @site.zip \
             -H "Content-Type: application/zip" \
-            "https://fpelaicctv-hrhqbecqgyb4fxd0.scm.centralindia-01.azurewebsites.net/api/zipdeploy?isAsync=false"
+            -w "\n%{http_code}" \
+            "https://fpelaicctv-hrhqbecqgyb4fxd0.scm.centralindia-01.azurewebsites.net/api/zipdeploy?isAsync=false")
           
-          echo "Deployment complete. Restarting app..."
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Deployment failed with status $HTTP_CODE"
+            exit 1
+          fi
+          
+          echo "✅ Deployment successful!"
+          
+          echo "Triggering sync..."
           curl -X POST \
             -u "${{ steps.publish-profile.outputs.username }}:${{ steps.publish-profile.outputs.password }}" \
             "https://fpelaicctv-hrhqbecqgyb4fxd0.scm.centralindia-01.azurewebsites.net/api/functions/synctriggers"
