@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: fpelaicctv-deploy
-  cancel-in-progress: true
+  group: fpelaicctv-deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHON_VERSION: "3.12"
@@ -88,9 +88,17 @@ jobs:
             "src/*" \
             "frontend/dist/*" \
             "frontend/src/*" \
+            "frontend/node_modules/*" \
             "*.log" \
             "*.DS_Store"
-          echo "✓ Deployment package created with backend/static included"
+          echo "✓ Deployment package created"
+          
+      - name: Verify deployment package
+        run: |
+          echo "=== Verifying site.zip contents ==="
+          unzip -l site.zip | grep -E "(startup.sh|backend/static|backend/main.py|requirements.txt)" || echo "ERROR: Missing critical files!"
+          echo "Package size:"
+          ls -lh site.zip
 
       # --- Deploy to Azure Web App --- 
       - name: Deploy to Azure Web App
