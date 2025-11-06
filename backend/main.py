@@ -28,15 +28,15 @@ app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 # For Azure deployment, paths change. Check multiple possible locations.
 STATIC_DIR = os.getenv("STATIC_DIR")
 if not STATIC_DIR:
-    # Try common deployment paths
+    # Try common deployment paths (relative first, then absolute)
     possible_paths = [
-        "/home/site/wwwroot/backend/static",
-        "backend/static",
-        "static"
+        "backend/static",  # Relative to CWD (works in /tmp on Azure)
+        "static",
+        "/home/site/wwwroot/backend/static"  # Absolute path (last resort)
     ]
     for path in possible_paths:
         if os.path.isdir(path):
-            STATIC_DIR = path
+            STATIC_DIR = os.path.abspath(path)  # Convert to absolute
             break
     if not STATIC_DIR:
         STATIC_DIR = "backend/static"
