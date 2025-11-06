@@ -32,15 +32,17 @@ jobs:
 
       - name: Install & build frontend
         run: |
+          cd frontend
           npm ci
           npm run build
+          cd ..
 
       # --- Stage frontend into backend/static ---
       - name: Stage static site into backend/static
         run: |
           rm -rf backend/static || true
           mkdir -p backend/static
-          cp -r dist/* backend/static/
+          cp -r frontend/dist/* backend/static/
           echo "Verifying frontend files copied:"
           ls -la backend/static/
           if [ ! -f "backend/static/index.html" ]; then
@@ -78,7 +80,16 @@ jobs:
           echo "Checking backend/static before deployment:"
           ls -la backend/static/ || echo "WARNING: backend/static is empty!"
           # Create deployment package (exclude source files, keep backend/static)
-          zip -r site.zip . -x "node_modules/*" ".git/*" ".github/*" "dist/*" "src/*" "*.log" "*.DS_Store"
+          zip -r site.zip . -x \
+            "node_modules/*" \
+            ".git/*" \
+            ".github/*" \
+            "dist/*" \
+            "src/*" \
+            "frontend/dist/*" \
+            "frontend/src/*" \
+            "*.log" \
+            "*.DS_Store"
           echo "✓ Deployment package created with backend/static included"
 
       # --- Deploy to Azure Web App --- 
