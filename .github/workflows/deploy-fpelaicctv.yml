@@ -100,49 +100,10 @@ jobs:
           echo "Package size:"
           ls -lh site.zip
       
-      - name: Clean Azure wwwroot before deployment
-        run: |
-          echo "Attempting to clean old deployment files..."
-          # This uses the publish profile to authenticate
-          # The clean: true flag in deploy step should handle this, but we're being explicit
-          echo "Clean flag will be handled by azure/webapps-deploy@v3"
-
-      # --- Deploy to Azure Web App via ZIP Deploy API --- 
-      - name: Extract publish profile credentials
-        id: publish-profile
-        run: |
-          # Extract username and password from publish profile
-          PROFILE='${{ env.PUBLISH_PROFILE }}'
-          USERNAME=$(echo "$PROFILE" | sed -n 's/.*userName="\([^"]*\)".*/\1/p' | head -1)
-          PASSWORD=$(echo "$PROFILE" | sed -n 's/.*userPWD="\([^"]*\)".*/\1/p' | head -1)
-          echo "::add-mask::$PASSWORD"
-          echo "username=$USERNAME" >> $GITHUB_OUTPUT
-          echo "password=$PASSWORD" >> $GITHUB_OUTPUT
-      
-      - name: Deploy via Kudu ZipDeploy API
-        run: |
-          echo "Deploying to Azure via Kudu API..."
-          RESPONSE=$(curl -X POST \
-            -u "${{ steps.publish-profile.outputs.username }}:${{ steps.publish-profile.outputs.password }}" \
-            --data-binary @site.zip \
-            -H "Content-Type: application/zip" \
-            -w "\n%{http_code}" \
-            "https://fpelaicctv-hrhqbecqgyb4fxd0.scm.centralindia-01.azurewebsites.net/api/zipdeploy?isAsync=false")
-          
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          
-          echo "HTTP Status: $HTTP_CODE"
-          echo "Response: $BODY"
-          
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "❌ Deployment failed with status $HTTP_CODE"
-            exit 1
-          fi
-          
-          echo "✅ Deployment successful!"
-          
-          echo "Triggering sync..."
-          curl -X POST \
-            -u "${{ steps.publish-profile.outputs.username }}:${{ steps.publish-profile.outputs.password }}" \
-            "https://fpelaicctv-hrhqbecqgyb4fxd0.scm.centralindia-01.azurewebsites.net/api/functions/synctriggers"
+      # --- Deploy to Azure Web App ---
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ env.PUBLISH_PROFILE }}
+          package: site.zip
