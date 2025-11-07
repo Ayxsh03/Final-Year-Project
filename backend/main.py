@@ -225,7 +225,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next):
         # Public paths that don't require authentication
-        open_paths = {"/login", "/logout", "/auth/callback", "/health"}
+        open_paths = {"/login", "/login/sso", "/logout", "/auth/callback", "/health"}
         path = request.url.path
         
         # Allow access to static files, images, favicon, and public paths
@@ -1799,12 +1799,10 @@ async def health_check():
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    """Display unified login page with both traditional and SSO options."""
-    # Check if user is already logged in
-    user = request.session.get("user")
-    if user:
-        return RedirectResponse(url="/", status_code=302)
-    
+    """Display unified login page with both traditional and SSO options.
+    Note: Do not auto-redirect if already authenticated; always show the page
+    so users can choose alternate sign-in methods.
+    """
     # Check if SSO is configured
     sso_enabled = all([TENANT_ID, CLIENT_ID, CLIENT_SECRET, REDIRECT_URI])
     
