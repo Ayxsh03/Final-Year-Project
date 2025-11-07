@@ -45,7 +45,7 @@ export const Sidebar = ({ collapsed, onToggleCollapse }: SidebarProps) => {
         {!collapsed && (
           <div className="flex items-center gap-2">
             <Shield className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold text-sidebar-foreground">Visionfacts</span>
+            <span className="text-xl font-bold text-sidebar-foreground">SecureWatch</span>
           </div>
         )}
         <Button

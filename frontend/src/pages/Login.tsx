@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 
 const Login = () => {
-  const [email, setEmail] = useState("hello@visionfacts.ai");
+  const [email, setEmail] = useState("hello@example.com");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
@@ -34,7 +34,7 @@ const Login = () => {
         <div className="w-full max-w-md space-y-8">
           {/* Logo and Title */}
           <div className="text-center space-y-4">
-            <h1 className="text-3xl font-bold text-primary">Visionfacts</h1>
+            <h1 className="text-3xl font-bold text-primary">SecureWatch</h1>
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold text-foreground">Sign In</h2>
               <p className="text-muted-foreground">Please enter your details to Sign in</p>
