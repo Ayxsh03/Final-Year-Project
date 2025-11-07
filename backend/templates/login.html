@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - {{ app_name }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 440px;
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .login-header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .login-header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .login-body {
+            padding: 40px 30px;
+        }
+
+        .alert {
+            background-color: #fee;
+            border: 1px solid #fcc;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            color: #c33;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .alert-icon {
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .login-options {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            outline: none;
+        }
+
+        .btn-microsoft {
+            background: #2f2f2f;
+            color: white;
+        }
+
+        .btn-microsoft:hover {
+            background: #1a1a1a;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-disabled {
+            background: #e0e0e0;
+            color: #999;
+            cursor: not-allowed;
+        }
+
+        .btn-disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .microsoft-logo {
+            width: 20px;
+            height: 20px;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 24px 0;
+            color: #999;
+            font-size: 13px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .divider span {
+            padding: 0 16px;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 24px;
+        }
+
+        .info-box h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .info-box p {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .footer {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .security-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .security-badge svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                max-width: 100%;
+                border-radius: 0;
+            }
+
+            .login-header {
+                padding: 30px 20px;
+            }
+
+            .login-body {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>🔐 {{ app_name }}</h1>
+            <p>Secure Authentication Portal</p>
+        </div>
+
+        <div class="login-body">
+            {% if error %}
+            <div class="alert">
+                <span class="alert-icon">⚠️</span>
+                <strong>Authentication Error:</strong> {{ error }}
+            </div>
+            {% endif %}
+
+            <div class="login-options">
+                {% if missing_config %}
+                <button class="btn btn-disabled" disabled>
+                    <svg class="microsoft-logo" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M0 0h10.9v10.9H0V0z" fill="#f25022"/>
+                        <path d="M12.1 0H23v10.9H12.1V0z" fill="#7fba00"/>
+                        <path d="M0 12.1h10.9V23H0V12.1z" fill="#00a4ef"/>
+                        <path d="M12.1 12.1H23V23H12.1V12.1z" fill="#ffb900"/>
+                    </svg>
+                    Sign in with Microsoft (Not Configured)
+                </button>
+                {% else %}
+                <a href="/login" class="btn btn-microsoft" id="signInBtn">
+                    <svg class="microsoft-logo" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M0 0h10.9v10.9H0V0z" fill="#f25022"/>
+                        <path d="M12.1 0H23v10.9H12.1V0z" fill="#7fba00"/>
+                        <path d="M0 12.1h10.9V23H0V12.1z" fill="#00a4ef"/>
+                        <path d="M12.1 12.1H23V23H12.1V12.1z" fill="#ffb900"/>
+                    </svg>
+                    <span id="btnText">Sign in with Microsoft</span>
+                </a>
+                {% endif %}
+            </div>
+
+            {% if not missing_config and allowed_domain %}
+            <div class="info-box">
+                <h3>🏢 Organization Access</h3>
+                <p>This application is restricted to <strong>@{{ allowed_domain }}</strong> accounts only.</p>
+            </div>
+            {% endif %}
+
+            <div class="security-badge">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                Secured by Azure Active Directory
+            </div>
+        </div>
+
+        <div class="footer">
+            © 2025 {{ app_name }}. All rights reserved.
+        </div>
+    </div>
+
+    <script>
+        const signInBtn = document.getElementById('signInBtn');
+        const btnText = document.getElementById('btnText');
+        
+        if (signInBtn) {
+            signInBtn.addEventListener('click', function(e) {
+                btnText.innerHTML = '<span class="loading"></span>';
+                // Allow navigation to proceed
+            });
+        }
+    </script>
+</body>
+</html>

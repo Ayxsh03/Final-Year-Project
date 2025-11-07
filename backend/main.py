@@ -1,8 +1,11 @@
-from fastapi import FastAPI, HTTPException, Query, Depends, Header, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Query, Depends, Header, BackgroundTasks, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 import os
 import json
@@ -11,14 +14,23 @@ import asyncpg
 import certifi  # type: ignore
 import cv2      # type: ignore
 import numpy as np  # type: ignore
+import msal  # type: ignore
+import secrets
+from urllib.parse import urlparse, urlencode
 
 from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, Field
 from uuid import UUID
-from urllib.parse import urlparse
 from datetime import datetime, timedelta, timezone
 
 app = FastAPI(title="Person Detection API", version="1.0.0")
+
+# ---- Session & Template Setup ------------------------------------------------
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY, max_age=86400)  # 24 hours
+
+# Template engine for login page
+templates = Jinja2Templates(directory="backend/templates")
 
 # ---- Static & image dirs -----------------------------------------------------
 IMAGES_DIR = os.getenv("IMAGES_DIR", "/home/images")
@@ -64,12 +76,35 @@ app.add_middleware(
 DATABASE_URL = os.getenv("DATABASE_URL")  # e.g. postgresql://.../db?sslmode=require
 API_KEY = os.getenv("API_KEY", "111-1111-1-11-1-11-1-1")
 
+# Azure SSO Configuration
+TENANT_ID = os.getenv("AZURE_TENANT_ID", "").strip()
+CLIENT_ID = os.getenv("AZURE_CLIENT_ID", "").strip()
+CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET", "").strip()
+ALLOWED_DOMAIN = (os.getenv("ALLOWED_DOMAIN") or "").lower().strip()
+REDIRECT_URI = os.getenv("REDIRECT_URI") or "http://localhost:8000/auth/callback"
+AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}" if TENANT_ID else ""
+OIDC_SCOPE = ["openid", "profile", "email"]
+APP_NAME = os.getenv("APP_NAME", "FpelAICCTV Person Detection")
 
-# ---- Auth helper -------------------------------------------------------------
+
+# ---- Auth helpers ------------------------------------------------------------
 async def validate_api_key(x_api_key: Optional[str] = Header(default=None)):
     if x_api_key is None or x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
+
+
+async def get_current_user(request: Request):
+    """Get current user from session or raise 401."""
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+
+async def get_optional_user(request: Request):
+    """Get current user from session or return None."""
+    return request.session.get("user")
 
 
 # ---- DB SSL helper -----------------------------------------------------------
@@ -101,6 +136,41 @@ async def get_db():
         yield conn
     finally:
         await conn.close()
+
+
+# ---- Auth Middleware ---------------------------------------------------------
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Middleware to protect routes requiring authentication."""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Public paths that don't require authentication
+        open_paths = {"/login", "/logout", "/auth/callback", "/health"}
+        path = request.url.path
+        
+        # Allow access to static files, images, favicon, and public paths
+        if any([
+            path in open_paths,
+            path.startswith("/static/"),
+            path.startswith("/assets/"),
+            path.startswith("/images/"),
+            path == "/favicon.ico"
+        ]):
+            return await call_next(request)
+        
+        # Check if user is authenticated for protected paths
+        user = request.session.get("user")
+        
+        # Protect UI routes (redirect to login)
+        if not path.startswith("/api/"):
+            if not user:
+                return RedirectResponse(url="/login", status_code=302)
+        
+        # For API routes, continue (will be protected by validate_api_key or get_current_user)
+        return await call_next(request)
+
+
+# Add the auth middleware
+app.add_middleware(AuthMiddleware)
 
 
 # ---- Models ------------------------------------------------------------------
@@ -1621,18 +1691,222 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.now()}
 
 
+# ---- Auth Routes -------------------------------------------------------------
+@app.get("/login", response_class=HTMLResponse)
+async def login(request: Request):
+    """Display login page or redirect to Azure AD for SSO."""
+    # Generate state for CSRF protection
+    request.session["state"] = secrets.token_urlsafe(16)
+    
+    # Check if SSO is configured
+    missing = [k for k, v in {
+        "AZURE_TENANT_ID": TENANT_ID,
+        "AZURE_CLIENT_ID": CLIENT_ID,
+        "AZURE_CLIENT_SECRET": CLIENT_SECRET,
+        "REDIRECT_URI": REDIRECT_URI,
+    }.items() if not v]
+    
+    if missing:
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "app_name": APP_NAME,
+                "error": f"SSO not configured. Missing: {', '.join(missing)}",
+                "missing_config": True,
+                "allowed_domain": ALLOWED_DOMAIN
+            }
+        )
+    
+    # Create MSAL confidential client
+    cca = msal.ConfidentialClientApplication(
+        CLIENT_ID,
+        authority=AUTHORITY,
+        client_credential=CLIENT_SECRET
+    )
+    
+    # Get authorization URL
+    auth_url = cca.get_authorization_request_url(
+        scopes=OIDC_SCOPE,
+        redirect_uri=REDIRECT_URI,
+        state=request.session["state"],
+        response_mode="form_post",
+        prompt="select_account"
+    )
+    
+    return RedirectResponse(url=auth_url, status_code=302)
+
+
+@app.route("/auth/callback", methods=["GET", "POST"])
+async def auth_callback(request: Request):
+    """Handle OAuth2 callback from Azure AD."""
+    # Get form data or query params
+    if request.method == "POST":
+        form_data = await request.form()
+        state = form_data.get("state")
+        code = form_data.get("code")
+        error = form_data.get("error")
+        error_description = form_data.get("error_description")
+    else:
+        state = request.query_params.get("state")
+        code = request.query_params.get("code")
+        error = request.query_params.get("error")
+        error_description = request.query_params.get("error_description")
+    
+    # Validate state
+    if state != request.session.get("state"):
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "app_name": APP_NAME,
+                "error": "Invalid state. Please try again.",
+                "allowed_domain": ALLOWED_DOMAIN
+            }
+        )
+    
+    # Check for errors
+    if error:
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "app_name": APP_NAME,
+                "error": error_description or error,
+                "allowed_domain": ALLOWED_DOMAIN
+            }
+        )
+    
+    if not code:
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "app_name": APP_NAME,
+                "error": "Authorization failed. No code received.",
+                "allowed_domain": ALLOWED_DOMAIN
+            }
+        )
+    
+    # Exchange code for token
+    cca = msal.ConfidentialClientApplication(
+        CLIENT_ID,
+        authority=AUTHORITY,
+        client_credential=CLIENT_SECRET
+    )
+    
+    token = cca.acquire_token_by_authorization_code(
+        code,
+        scopes=[],
+        redirect_uri=REDIRECT_URI
+    )
+    
+    if "error" in token:
+        msg = token.get("error_description") or token.get("error")
+        code_val = token.get("error_codes")
+        if code_val:
+            msg = f"{msg} (AAD error codes: {code_val})"
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "app_name": APP_NAME,
+                "error": msg,
+                "allowed_domain": ALLOWED_DOMAIN
+            }
+        )
+    
+    # Extract user info from token claims
+    claims = token.get("id_token_claims", {}) or {}
+    email = claims.get("preferred_username") or claims.get("upn") or claims.get("email")
+    
+    if not email:
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "app_name": APP_NAME,
+                "error": "No email found in token. Please contact your administrator.",
+                "allowed_domain": ALLOWED_DOMAIN
+            }
+        )
+    
+    # Check domain restriction
+    if ALLOWED_DOMAIN and not email.lower().endswith("@" + ALLOWED_DOMAIN):
+        request.session.clear()
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "app_name": APP_NAME,
+                "error": f"Access restricted to @{ALLOWED_DOMAIN} accounts only.",
+                "allowed_domain": ALLOWED_DOMAIN
+            }
+        )
+    
+    # Check tenant restriction
+    if claims.get("tid") and TENANT_ID and str(claims["tid"]).lower() != TENANT_ID.lower():
+        request.session.clear()
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "app_name": APP_NAME,
+                "error": "Wrong tenant. Access denied.",
+                "allowed_domain": ALLOWED_DOMAIN
+            }
+        )
+    
+    # Store user in session
+    request.session["user"] = {
+        "email": email,
+        "name": claims.get("name") or email.split("@")[0]
+    }
+    
+    return RedirectResponse(url="/", status_code=302)
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    """Clear session and redirect to Azure AD logout."""
+    request.session.clear()
+    
+    if AUTHORITY and REDIRECT_URI:
+        logout_url = f"{AUTHORITY}/oauth2/v2.0/logout?{urlencode({'post_logout_redirect_uri': str(request.base_url) + 'login'})}"
+        return RedirectResponse(url=logout_url, status_code=302)
+    
+    return RedirectResponse(url="/login", status_code=302)
+
+
+@app.get("/api/v1/user")
+async def get_user_info(user: dict = Depends(get_current_user)):
+    """Get current authenticated user info."""
+    return user
+
+
 @app.get("/", include_in_schema=False)
-def serve_root():
+async def serve_root(request: Request):
+    """Serve the frontend or redirect to login."""
+    user = request.session.get("user")
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    
     index_file = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_file):
         return FileResponse(index_file)
-    return {"message": "Frontend not built yet. Run Vite build and copy into backend/static."}
+    return {"message": "Frontend not built yet. Run Vite build and copy into backend/static.", "user": user}
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
-def spa_fallback(full_path: str):
-    if full_path.startswith(("api/", "images/", "static/")):
+async def spa_fallback(full_path: str, request: Request):
+    """SPA fallback for React Router."""
+    if full_path.startswith(("api/", "images/", "static/", "assets/")):
         raise HTTPException(status_code=404, detail="Not Found")
+    
+    user = request.session.get("user")
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    
     index_file = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_file):
         return FileResponse(index_file)
