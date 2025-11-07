@@ -1746,7 +1746,6 @@ async def login(request: Request):
         scopes=OIDC_SCOPE,
         redirect_uri=REDIRECT_URI,
         state=request.session["state"],
-        response_mode="form_post",
         prompt="select_account"
     )
     
