@@ -80,6 +80,62 @@
             margin-right: 8px;
         }
 
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 24px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            font-weight: 500;
+            color: #666;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
         .login-options {
             display: flex;
             flex-direction: column;
@@ -100,6 +156,17 @@
             cursor: pointer;
             border: none;
             outline: none;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
         }
 
         .btn-microsoft {
@@ -122,6 +189,11 @@
         .btn-disabled:hover {
             transform: none;
             box-shadow: none;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         .microsoft-logo {
@@ -237,43 +309,47 @@
             </div>
             {% endif %}
 
+            <!-- SSO Login Option -->
+            {% if sso_enabled %}
             <div class="login-options">
-                {% if missing_config %}
-                <button class="btn btn-disabled" disabled>
+                <a href="/login/sso" class="btn btn-microsoft" id="ssoBtn">
                     <svg class="microsoft-logo" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M0 0h10.9v10.9H0V0z" fill="#f25022"/>
                         <path d="M12.1 0H23v10.9H12.1V0z" fill="#7fba00"/>
                         <path d="M0 12.1h10.9V23H0V12.1z" fill="#00a4ef"/>
                         <path d="M12.1 12.1H23V23H12.1V12.1z" fill="#ffb900"/>
                     </svg>
-                    Sign in with Microsoft (Not Configured)
-                </button>
-                {% else %}
-                <a href="/login" class="btn btn-microsoft" id="signInBtn">
-                    <svg class="microsoft-logo" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M0 0h10.9v10.9H0V0z" fill="#f25022"/>
-                        <path d="M12.1 0H23v10.9H12.1V0z" fill="#7fba00"/>
-                        <path d="M0 12.1h10.9V23H0V12.1z" fill="#00a4ef"/>
-                        <path d="M12.1 12.1H23V23H12.1V12.1z" fill="#ffb900"/>
-                    </svg>
-                    <span id="btnText">Sign in with Microsoft</span>
+                    <span id="ssoBtnText">Sign in with Microsoft</span>
                 </a>
-                {% endif %}
             </div>
 
-            {% if not missing_config and allowed_domain %}
+            {% if allowed_domain %}
             <div class="info-box">
                 <h3>🏢 Organization Access</h3>
-                <p>This application is restricted to <strong>@{{ allowed_domain }}</strong> accounts only.</p>
+                <p>SSO is restricted to <strong>@{{ allowed_domain }}</strong> accounts only.</p>
             </div>
             {% endif %}
+
+            <div class="divider"><span>OR</span></div>
+
+            <a href="/auth" class="btn btn-primary">
+                📧 Sign in with Email & Password
+            </a>
 
             <div class="security-badge">
                 <svg fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                 </svg>
-                Secured by Azure Active Directory
+                Secured by Azure AD & Supabase Auth
             </div>
+            {% else %}
+            <p style="text-align: center; color: #666; margin-bottom: 24px;">
+                SSO is not configured. Please use traditional login.
+            </p>
+            <a href="/auth" class="btn btn-primary">
+                📧 Sign in with Email & Password
+            </a>
+            {% endif %}
         </div>
 
         <div class="footer">
@@ -282,13 +358,11 @@
     </div>
 
     <script>
-        const signInBtn = document.getElementById('signInBtn');
-        const btnText = document.getElementById('btnText');
-        
-        if (signInBtn) {
-            signInBtn.addEventListener('click', function(e) {
-                btnText.innerHTML = '<span class="loading"></span>';
-                // Allow navigation to proceed
+        // SSO button loading state
+        const ssoBtn = document.getElementById('ssoBtn');
+        if (ssoBtn) {
+            ssoBtn.addEventListener('click', () => {
+                document.getElementById('ssoBtnText').innerHTML = '<span class="loading"></span> Redirecting...';
             });
         }
     </script>

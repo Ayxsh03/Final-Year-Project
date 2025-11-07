@@ -16,6 +16,8 @@ import cv2      # type: ignore
 import numpy as np  # type: ignore
 import msal  # type: ignore
 import secrets
+import hashlib
+import hmac
 from urllib.parse import urlparse, urlencode
 
 from typing import List, Optional, Any, Dict
@@ -121,6 +123,71 @@ async def get_optional_user(request: Request):
     return request.session.get("user")
 
 
+def hash_password(password: str) -> str:
+    """Hash password using SHA256."""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """Verify password against hash."""
+    return hmac.compare_digest(hash_password(password), password_hash)
+
+
+async def get_or_create_sso_profile(conn: asyncpg.Connection, email: str, full_name: str, azure_id: str = None) -> dict:
+    """Get existing SSO profile or create new one in Supabase profiles table."""
+    # Try to find existing profile by email or Azure ID
+    profile = await conn.fetchrow(
+        """
+        SELECT id, email, full_name, role, auth_provider 
+        FROM profiles 
+        WHERE email = $1 OR (azure_id = $2 AND azure_id IS NOT NULL)
+        """,
+        email, azure_id
+    )
+    
+    if profile:
+        # Update last login and Azure ID if needed
+        await conn.execute(
+            """
+            UPDATE profiles 
+            SET last_login = NOW(), 
+                azure_id = COALESCE(azure_id, $1),
+                auth_provider = CASE 
+                    WHEN auth_provider = 'supabase' THEN auth_provider 
+                    ELSE 'azure_sso' 
+                END
+            WHERE id = $2
+            """,
+            azure_id, profile["id"]
+        )
+        return dict(profile)
+    
+    # Create new profile for SSO user
+    # Note: This requires id to be provided or generated, and may need special handling
+    # depending on your Supabase setup
+    new_profile_id = await conn.fetchval("SELECT gen_random_uuid()")
+    
+    new_profile = await conn.fetchrow(
+        """
+        INSERT INTO profiles (id, email, full_name, auth_provider, azure_id, last_login, created_at, updated_at)
+        VALUES ($1, $2, $3, 'azure_sso', $4, NOW(), NOW(), NOW())
+        RETURNING id, email, full_name, role, auth_provider
+        """,
+        new_profile_id, email, full_name, azure_id
+    )
+    
+    # Log user creation
+    await conn.execute(
+        """
+        INSERT INTO activity_logs (user_id, action, email, message, created_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        """,
+        new_profile["id"], "sso_profile_created", email, f"SSO profile created for {email}"
+    )
+    
+    return dict(new_profile)
+
+
 # ---- DB SSL helper -----------------------------------------------------------
 def _build_ssl_context_for_db(url: str) -> Optional[ssl.SSLContext]:
     """Create an SSL context for Postgres, optionally disabling verification via env."""
@@ -190,6 +257,25 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY, max_age=864
 
 
 # ---- Models ------------------------------------------------------------------
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    full_name: str
+
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    full_name: Optional[str] = None
+    role: str = "user"
+    auth_provider: str = "email"
+
+
 class DetectionEvent(BaseModel):
     timestamp: Optional[datetime] = None  # let server default if missing
     person_id: int
@@ -1708,31 +1794,41 @@ async def health_check():
 
 
 # ---- Auth Routes -------------------------------------------------------------
+# Note: Traditional auth handled by Supabase (frontend Auth.tsx)
+# SSO provides alternative login method
+
 @app.get("/login", response_class=HTMLResponse)
-async def login(request: Request):
-    """Display login page or redirect to Azure AD for SSO."""
+async def login_page(request: Request):
+    """Display unified login page with both traditional and SSO options."""
+    # Check if user is already logged in
+    user = request.session.get("user")
+    if user:
+        return RedirectResponse(url="/", status_code=302)
+    
+    # Check if SSO is configured
+    sso_enabled = all([TENANT_ID, CLIENT_ID, CLIENT_SECRET, REDIRECT_URI])
+    
+    return templates.TemplateResponse(
+        "login.html",
+        {
+            "request": request,
+            "app_name": APP_NAME,
+            "sso_enabled": sso_enabled,
+            "allowed_domain": ALLOWED_DOMAIN,
+            "error": request.query_params.get("error")
+        }
+    )
+
+
+@app.get("/login/sso")
+async def login_sso(request: Request):
+    """Initiate SSO login flow."""
     # Generate state for CSRF protection
     request.session["state"] = secrets.token_urlsafe(16)
     
     # Check if SSO is configured
-    missing = [k for k, v in {
-        "AZURE_TENANT_ID": TENANT_ID,
-        "AZURE_CLIENT_ID": CLIENT_ID,
-        "AZURE_CLIENT_SECRET": CLIENT_SECRET,
-        "REDIRECT_URI": REDIRECT_URI,
-    }.items() if not v]
-    
-    if missing:
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_name": APP_NAME,
-                "error": f"SSO not configured. Missing: {', '.join(missing)}",
-                "missing_config": True,
-                "allowed_domain": ALLOWED_DOMAIN
-            }
-        )
+    if not all([TENANT_ID, CLIENT_ID, CLIENT_SECRET, REDIRECT_URI]):
+        return RedirectResponse(url="/login?error=SSO+not+configured", status_code=302)
     
     # Create MSAL confidential client
     cca = msal.ConfidentialClientApplication(
@@ -1872,10 +1968,35 @@ async def auth_callback(request: Request):
             }
         )
     
-    # Store user in session
+    # Get or create profile in database
+    ssl_ctx = _build_ssl_context_for_db(DATABASE_URL or "")
+    conn = await asyncpg.connect(DATABASE_URL, ssl=ssl_ctx)
+    try:
+        profile = await get_or_create_sso_profile(
+            conn,
+            email=email,
+            full_name=claims.get("name") or email.split("@")[0],
+            azure_id=claims.get("oid") or claims.get("sub")
+        )
+        
+        # Log login activity
+        await conn.execute(
+            """
+            INSERT INTO activity_logs (user_id, action, email, message, created_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            """,
+            profile["id"], "logged_in", email, f"{email} logged in via Azure SSO"
+        )
+    finally:
+        await conn.close()
+    
+    # Store profile in session
     request.session["user"] = {
-        "email": email,
-        "name": claims.get("name") or email.split("@")[0]
+        "id": str(profile["id"]),
+        "email": profile["email"],
+        "name": profile["full_name"],
+        "role": profile.get("role", "viewer"),
+        "auth_provider": profile.get("auth_provider", "azure_sso")
     }
     
     return RedirectResponse(url="/", status_code=302)
