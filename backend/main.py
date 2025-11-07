@@ -29,8 +29,23 @@ app = FastAPI(title="Person Detection API", version="1.0.0")
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY, max_age=86400)  # 24 hours
 
-# Template engine for login page
-templates = Jinja2Templates(directory="backend/templates")
+# Template engine for login page - check multiple possible locations
+TEMPLATES_DIR = os.getenv("TEMPLATES_DIR")
+if not TEMPLATES_DIR:
+    possible_template_paths = [
+        "backend/templates",  # Relative to CWD (works in /tmp on Azure)
+        "templates",
+        "/home/site/wwwroot/backend/templates"  # Absolute path (last resort)
+    ]
+    for path in possible_template_paths:
+        if os.path.isdir(path):
+            TEMPLATES_DIR = os.path.abspath(path)
+            break
+    if not TEMPLATES_DIR:
+        TEMPLATES_DIR = "backend/templates"
+        os.makedirs(TEMPLATES_DIR, exist_ok=True)
+
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # ---- Static & image dirs -----------------------------------------------------
 IMAGES_DIR = os.getenv("IMAGES_DIR", "/home/images")
