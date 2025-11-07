@@ -27,7 +27,6 @@ app = FastAPI(title="Person Detection API", version="1.0.0")
 
 # ---- Session & Template Setup ------------------------------------------------
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY, max_age=86400)  # 24 hours
 
 # Template engine for login page - check multiple possible locations
 TEMPLATES_DIR = os.getenv("TEMPLATES_DIR")
@@ -98,7 +97,7 @@ CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET", "").strip()
 ALLOWED_DOMAIN = (os.getenv("ALLOWED_DOMAIN") or "").lower().strip()
 REDIRECT_URI = os.getenv("REDIRECT_URI") or "http://localhost:8000/auth/callback"
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}" if TENANT_ID else ""
-OIDC_SCOPE = ["openid", "profile", "email"]
+OIDC_SCOPE = ["User.Read"]
 APP_NAME = os.getenv("APP_NAME", "FpelAICCTV Person Detection")
 
 
@@ -186,6 +185,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 # Add the auth middleware
 app.add_middleware(AuthMiddleware)
+# IMPORTANT: SessionMiddleware must wrap inside middlewares to populate request.session
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY, max_age=86400)  # 24 hours
 
 
 # ---- Models ------------------------------------------------------------------
