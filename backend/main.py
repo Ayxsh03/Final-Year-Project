@@ -1793,6 +1793,53 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.now()}
 
 
+@app.get("/api/v1/diagnostics/db")
+async def db_diagnostics():
+    """Return basic DB diagnostics and row counts for key tables."""
+    try:
+        if not DATABASE_URL:
+            raise HTTPException(status_code=500, detail="DATABASE_URL is not configured")
+        ssl_ctx = _build_ssl_context_for_db(DATABASE_URL)
+        conn = await asyncpg.connect(DATABASE_URL, ssl=ssl_ctx)
+        try:
+            # Try counts for common tables; ignore missing tables gracefully
+            async def safe_count(table: str) -> int:
+                try:
+                    return await conn.fetchval(f"SELECT COUNT(*) FROM {table}")
+                except Exception:
+                    return -1  # indicates table missing or error
+
+            counts = {
+                "activity_logs": await safe_count("activity_logs"),
+                "detection_events": await safe_count("detection_events"),
+                "camera_devices": await safe_count("camera_devices"),
+                "alert_settings": await safe_count("alert_settings"),
+                "profiles": await safe_count("profiles"),
+            }
+
+            # Parse DB host for comparison (mask creds)
+            from urllib.parse import urlparse
+            parsed = urlparse(DATABASE_URL)
+            db_info = {
+                "scheme": parsed.scheme,
+                "host": parsed.hostname,
+                "port": parsed.port,
+                "database": (parsed.path or "/").lstrip("/") or None,
+            }
+
+            return {
+                "ok": True,
+                "db": db_info,
+                "counts": counts,
+                "timestamp": datetime.now().isoformat(),
+            }
+        finally:
+            await conn.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ---- Auth Routes -------------------------------------------------------------
 # Note: Traditional auth handled by Supabase (frontend Auth.tsx)
 # SSO provides alternative login method
