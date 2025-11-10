@@ -71,6 +71,7 @@ class ApiService {
         ...(isWrite && API_KEY ? { 'X-API-Key': API_KEY } : {}),
         ...options?.headers,
       },
+      credentials: 'include',
       ...options,
     });
 

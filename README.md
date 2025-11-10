@@ -174,12 +174,6 @@ DETECTION_HEIGHT=480
 FRAME_STRIDE=5
 ```
 
-## 📖 Documentation
-
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Complete deployment guide for Azure, Docker, and bare metal
-- **[FIXES_APPLIED.md](FIXES_APPLIED.md)** - Summary of all fixes applied for Linux compatibility
-- **[.env.example](.env.example)** - Environment variable template with detailed comments
-
 ## 🧪 Validation
 
 Before deploying, run the validation script:
@@ -206,22 +200,6 @@ This checks:
 - [ ] Set firewall rules appropriately
 - [ ] Keep dependencies updated
 
-## 🐛 Troubleshooting
-
-### `ImportError: libGL.so.1: cannot open shared object file`
-
-**Fixed!** All configurations now use `opencv-python-headless` and `startup.sh` enforces this on Azure.
-
-### Frontend not loading
-
-**For local dev**:
-```bash
-npm run build
-mkdir -p backend/static
-cp -r dist/* backend/static/
-```
-
-GitHub Actions handles this automatically for Azure deployments.
 
 ### Database connection fails
 
@@ -230,7 +208,6 @@ GitHub Actions handles this automatically for Azure deployments.
 3. Check firewall rules (port 5432)
 4. Test connection: `psql $DATABASE_URL`
 
-See **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** for more troubleshooting.
 
 ## 🚦 API Endpoints
 
@@ -265,17 +242,3 @@ This project is developed as a Final Year Project. All rights reserved.
 - **FastAPI** - Modern Python web framework
 - **React** - UI framework
 - **shadcn/ui** - Component library
-
-## 📞 Support
-
-For deployment issues or questions:
-1. Run `./validate-deployment.sh` to check configuration
-2. Review logs (Azure Log Stream, Docker logs, or systemd journal)
-3. Check [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) troubleshooting section
-4. Verify all environment variables are set correctly
-
----
-
-**Status**: ✅ Ready for production deployment on Linux servers  
-**Last Updated**: Nov 5, 2025  
-**Python Version**: 3.12 (all components aligned)
