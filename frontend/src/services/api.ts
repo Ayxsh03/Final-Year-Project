@@ -1,4 +1,12 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+// Resolve API base robustly. Default to '/api/v1' when unset/invalid.
+const RAW_API_BASE = (import.meta.env as any).VITE_API_BASE_URL as string | undefined;
+const NORMALIZED_BASE = (() => {
+  const base = (RAW_API_BASE && RAW_API_BASE.trim()) ? RAW_API_BASE.trim() : '/api/v1';
+  // If base is just '/', treat as unset
+  const cleaned = base === '/' ? '/api/v1' : base;
+  return cleaned.endsWith('/') ? cleaned.slice(0, -1) : cleaned;
+})();
+const API_BASE_URL = NORMALIZED_BASE;
 const API_KEY = import.meta.env.VITE_API_KEY || '';
 
 export interface DetectionEvent {
@@ -65,7 +73,13 @@ export interface PeopleCountResponse {
 class ApiService {
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const isWrite = options?.method && options.method !== 'GET';
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    let url = `${API_BASE_URL}${path}`;
+    // Add cache-busting for GET requests to avoid stale browser disk cache
+    if (!isWrite) {
+      url += (url.includes('?') ? '&' : '?') + `_=${Date.now()}`;
+    }
+    const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
         ...(isWrite && API_KEY ? { 'X-API-Key': API_KEY } : {}),
