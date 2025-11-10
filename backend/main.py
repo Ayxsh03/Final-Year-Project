@@ -1812,7 +1812,7 @@ async def login_sso(request: Request):
     
     # Check if SSO is configured
     if not all([TENANT_ID, CLIENT_ID, CLIENT_SECRET, REDIRECT_URI]):
-        return RedirectResponse(url="/login?error=SSO+not+configured", status_code=302)
+        return RedirectResponse(url="/auth?error=SSO+not+configured", status_code=302)
     
     # Create MSAL confidential client
     cca = msal.ConfidentialClientApplication(
@@ -1850,38 +1850,15 @@ async def auth_callback(request: Request):
     
     # Validate state
     if state != request.session.get("state"):
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_name": APP_NAME,
-                "error": "Invalid state. Please try again.",
-                "allowed_domain": ALLOWED_DOMAIN
-            }
-        )
+        return RedirectResponse(url=f"/auth?error=" + urlencode({"error": "Invalid state. Please try again."}), status_code=302)
     
     # Check for errors
     if error:
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_name": APP_NAME,
-                "error": error_description or error,
-                "allowed_domain": ALLOWED_DOMAIN
-            }
-        )
+        err = error_description or error
+        return RedirectResponse(url=f"/auth?" + urlencode({"error": err}), status_code=302)
     
     if not code:
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_name": APP_NAME,
-                "error": "Authorization failed. No code received.",
-                "allowed_domain": ALLOWED_DOMAIN
-            }
-        )
+        return RedirectResponse(url=f"/auth?" + urlencode({"error": "Authorization failed. No code received."}), status_code=302)
     
     # Exchange code for token
     cca = msal.ConfidentialClientApplication(
@@ -1901,56 +1878,24 @@ async def auth_callback(request: Request):
         code_val = token.get("error_codes")
         if code_val:
             msg = f"{msg} (AAD error codes: {code_val})"
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_name": APP_NAME,
-                "error": msg,
-                "allowed_domain": ALLOWED_DOMAIN
-            }
-        )
+        return RedirectResponse(url=f"/auth?" + urlencode({"error": msg}), status_code=302)
     
     # Extract user info from token claims
     claims = token.get("id_token_claims", {}) or {}
     email = claims.get("preferred_username") or claims.get("upn") or claims.get("email")
     
     if not email:
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_name": APP_NAME,
-                "error": "No email found in token. Please contact your administrator.",
-                "allowed_domain": ALLOWED_DOMAIN
-            }
-        )
+        return RedirectResponse(url=f"/auth?" + urlencode({"error": "No email found in token. Please contact your administrator."}), status_code=302)
     
     # Check domain restriction
     if ALLOWED_DOMAIN and not email.lower().endswith("@" + ALLOWED_DOMAIN):
         request.session.clear()
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_name": APP_NAME,
-                "error": f"Access restricted to @{ALLOWED_DOMAIN} accounts only.",
-                "allowed_domain": ALLOWED_DOMAIN
-            }
-        )
+        return RedirectResponse(url=f"/auth?" + urlencode({"error": f"Access restricted to @{ALLOWED_DOMAIN} accounts only."}), status_code=302)
     
     # Check tenant restriction
     if claims.get("tid") and TENANT_ID and str(claims["tid"]).lower() != TENANT_ID.lower():
         request.session.clear()
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "app_name": APP_NAME,
-                "error": "Wrong tenant. Access denied.",
-                "allowed_domain": ALLOWED_DOMAIN
-            }
-        )
+        return RedirectResponse(url=f"/auth?" + urlencode({"error": "Wrong tenant. Access denied."}), status_code=302)
     
     # Get or create profile in database
     ssl_ctx = _build_ssl_context_for_db(DATABASE_URL or "")
@@ -2007,7 +1952,7 @@ async def serve_root(request: Request):
     """Serve the frontend or redirect to login."""
     user = request.session.get("user")
     if not user:
-        return RedirectResponse(url="/login", status_code=302)
+        return RedirectResponse(url="/auth", status_code=302)
     
     index_file = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_file):
@@ -2023,7 +1968,13 @@ async def spa_fallback(full_path: str, request: Request):
     
     user = request.session.get("user")
     if not user:
-        return RedirectResponse(url="/login", status_code=302)
+        # Allow unauthenticated access to /auth so the SPA can render the auth page
+        if full_path == "auth":
+            index_file = os.path.join(STATIC_DIR, "index.html")
+            if os.path.exists(index_file):
+                return FileResponse(index_file)
+            raise HTTPException(status_code=404, detail="Frontend not built")
+        return RedirectResponse(url="/auth", status_code=302)
     
     index_file = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_file):
