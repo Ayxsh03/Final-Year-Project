@@ -225,7 +225,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next):
         # Public paths that don't require authentication
-        open_paths = {"/login", "/login/sso", "/logout", "/auth/callback", "/health"}
+        open_paths = {"/login/sso", "/logout", "/auth/callback", "/health", "/auth"}
         path = request.url.path
         
         # Allow access to static files, images, favicon, and public paths
@@ -241,10 +241,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Check if user is authenticated for protected paths
         user = request.session.get("user")
         
-        # Protect UI routes (redirect to login)
+        # Protect UI routes (redirect to /auth)
         if not path.startswith("/api/"):
             if not user:
-                return RedirectResponse(url="/login", status_code=302)
+                return RedirectResponse(url="/auth", status_code=302)
         
         # For API routes, continue (will be protected by validate_api_key or get_current_user)
         return await call_next(request)
@@ -1797,25 +1797,11 @@ async def health_check():
 # Note: Traditional auth handled by Supabase (frontend Auth.tsx)
 # SSO provides alternative login method
 
-@app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    """Display unified login page with both traditional and SSO options.
-    Note: Do not auto-redirect if already authenticated; always show the page
-    so users can choose alternate sign-in methods.
-    """
-    # Check if SSO is configured
-    sso_enabled = all([TENANT_ID, CLIENT_ID, CLIENT_SECRET, REDIRECT_URI])
-    
-    return templates.TemplateResponse(
-        "login.html",
-        {
-            "request": request,
-            "app_name": APP_NAME,
-            "sso_enabled": sso_enabled,
-            "allowed_domain": ALLOWED_DOMAIN,
-            "error": request.query_params.get("error")
-        }
-    )
+# Redirect /login to /auth for simplicity
+@app.get("/login")
+async def login_redirect():
+    """Redirect old /login to new unified /auth page."""
+    return RedirectResponse(url="/auth", status_code=302)
 
 
 @app.get("/login/sso")
@@ -1997,19 +1983,17 @@ async def auth_callback(request: Request):
         "auth_provider": profile.get("auth_provider", "azure_sso")
     }
     
+    # Redirect to app root after successful SSO
     return RedirectResponse(url="/", status_code=302)
 
 
 @app.get("/logout")
 async def logout(request: Request):
-    """Clear session and redirect to Azure AD logout."""
+    """Clear session and redirect to /auth."""
     request.session.clear()
     
-    if AUTHORITY and REDIRECT_URI:
-        logout_url = f"{AUTHORITY}/oauth2/v2.0/logout?{urlencode({'post_logout_redirect_uri': str(request.base_url) + 'login'})}"
-        return RedirectResponse(url=logout_url, status_code=302)
-    
-    return RedirectResponse(url="/login", status_code=302)
+    # Redirect to unified auth page
+    return RedirectResponse(url="/auth", status_code=302)
 
 
 @app.get("/api/v1/user")

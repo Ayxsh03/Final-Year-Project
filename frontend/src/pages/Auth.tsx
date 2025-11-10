@@ -14,16 +14,27 @@ export const Auth = () => {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already logged in
+    // Check if user is already logged in via Supabase or backend SSO
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         navigate("/");
+        return;
+      }
+      // Check backend SSO session
+      try {
+        const res = await fetch("/api/v1/user", { credentials: "include" });
+        if (res.ok) {
+          navigate("/");
+        }
+      } catch (_e) {
+        // No backend session either; stay on auth page
       }
     };
     checkUser();
@@ -91,6 +102,17 @@ export const Auth = () => {
     }
   };
 
+  const handleSsoSignIn = async () => {
+    setSsoLoading(true);
+    setError("");
+    try {
+      window.location.href = "/login/sso";
+    } catch (error: any) {
+      setError("Failed to start SSO login");
+      setSsoLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <Card className="w-full max-w-md">
@@ -136,6 +158,27 @@ export const Auth = () => {
                 )}
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Signing in..." : "Sign In"}
+                </Button>
+                
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                      Or continue with
+                    </span>
+                  </div>
+                </div>
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleSsoSignIn}
+                  disabled={ssoLoading}
+                >
+                  {ssoLoading ? "Redirecting..." : "Sign in with Microsoft (SSO)"}
                 </Button>
               </form>
             </TabsContent>
