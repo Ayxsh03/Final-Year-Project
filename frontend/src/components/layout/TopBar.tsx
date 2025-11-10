@@ -30,12 +30,15 @@ export const TopBar = () => {
   };
 
   const handleLogout = async () => {
-    await signOut();
-    navigate("/auth");
-    toast({
-      title: "Logged out",
-      description: "You have been successfully logged out.",
-    });
+    try {
+      // Clear Supabase session first
+      await signOut();
+    } catch (_e) {
+      // ignore errors
+    }
+    // Force a full navigation to backend /logout to clear server session cookie
+    // This avoids SPA intercept and guarantees Set-Cookie from server is applied
+    window.location.href = "/logout";
   };
 
   return (

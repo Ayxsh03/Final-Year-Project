@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,26 +19,8 @@ export const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Check if user is already logged in via Supabase or backend SSO
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate("/");
-        return;
-      }
-      // Check backend SSO session
-      try {
-        const res = await fetch("/api/v1/user", { credentials: "include" });
-        if (res.ok) {
-          navigate("/");
-        }
-      } catch (_e) {
-        // No backend session either; stay on auth page
-      }
-    };
-    checkUser();
-  }, [navigate]);
+  // Intentionally do not auto-redirect away from /auth.
+  // Users can choose email/password or SSO from this page.
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
