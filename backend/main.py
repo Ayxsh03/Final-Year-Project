@@ -108,6 +108,57 @@ OIDC_SCOPE = ["User.Read"]
 APP_NAME = os.getenv("APP_NAME", "FpelAICCTV Person Detection")
 
 
+# ---- DB Helper Classes -------------------------------------------------------
+class DatabaseWrapper:
+    """Wrapper to make aioodbc compatible with asyncpg-style queries."""
+    def __init__(self, conn):
+        self.conn = conn
+
+    async def fetch(self, query, *args):
+        async with self.conn.cursor() as cur:
+            # Replace $n with ?
+            import re
+            query = re.sub(r'\$\d+', '?', query)
+            await cur.execute(query, args)
+            if cur.description:
+                columns = [column[0] for column in cur.description]
+                rows = await cur.fetchall()
+                return [dict(zip(columns, row)) for row in rows]
+            return []
+
+    async def fetchrow(self, query, *args):
+        rows = await self.fetch(query, *args)
+        return rows[0] if rows else None
+
+    async def fetchval(self, query, *args):
+        rows = await self.fetch(query, *args)
+        if rows:
+            return list(rows[0].values())[0]
+        return None
+
+    async def execute(self, query, *args):
+        async with self.conn.cursor() as cur:
+            import re
+            query = re.sub(r'\$\d+', '?', query)
+            await cur.execute(query, args)
+            await self.conn.commit()
+            
+    async def close(self):
+        await self.conn.close()
+
+
+def _build_connection_string(url: str) -> str:
+    """Build ODBC connection string from URL or env var."""
+    # If it's already a connection string (contains ';'), return as is
+    if ";" in url and "Driver=" in url:
+        return url
+        
+    # If it's a postgres URL, we need to convert or fail. 
+    # We assume the user provides a proper SQL Server connection string in DATABASE_URL.
+    # Format: Driver={ODBC Driver 17 for SQL Server};Server=myServerAddress;Database=myDataBase;Uid=myUsername;Pwd=myPassword;
+    return url
+
+
 # ---- Auth helpers ------------------------------------------------------------
 async def validate_api_key(x_api_key: Optional[str] = Header(default=None)):
     if x_api_key is None or x_api_key != API_KEY:
@@ -200,56 +251,6 @@ async def get_or_create_sso_profile(conn: DatabaseWrapper, email: str, full_name
     
     return dict(new_profile)
 
-
-# ---- DB SSL helper -----------------------------------------------------------
-# SQL Server ODBC driver handles SSL via connection string, but we might need to adjust
-# connection string based on env vars.
-def _build_connection_string(url: str) -> str:
-    """Build ODBC connection string from URL or env var."""
-    # If it's already a connection string (contains ';'), return as is
-    if ";" in url and "Driver=" in url:
-        return url
-        
-    # If it's a postgres URL, we need to convert or fail. 
-    # We assume the user provides a proper SQL Server connection string in DATABASE_URL.
-    # Format: Driver={ODBC Driver 17 for SQL Server};Server=myServerAddress;Database=myDataBase;Uid=myUsername;Pwd=myPassword;
-    return url
-
-class DatabaseWrapper:
-    def __init__(self, conn):
-        self.conn = conn
-
-    async def fetch(self, query, *args):
-        async with self.conn.cursor() as cur:
-            # Replace $n with ?
-            import re
-            query = re.sub(r'\$\d+', '?', query)
-            await cur.execute(query, args)
-            if cur.description:
-                columns = [column[0] for column in cur.description]
-                rows = await cur.fetchall()
-                return [dict(zip(columns, row)) for row in rows]
-            return []
-
-    async def fetchrow(self, query, *args):
-        rows = await self.fetch(query, *args)
-        return rows[0] if rows else None
-
-    async def fetchval(self, query, *args):
-        rows = await self.fetch(query, *args)
-        if rows:
-            return list(rows[0].values())[0]
-        return None
-
-    async def execute(self, query, *args):
-        async with self.conn.cursor() as cur:
-            import re
-            query = re.sub(r'\$\d+', '?', query)
-            await cur.execute(query, args)
-            await self.conn.commit()
-            
-    async def close(self):
-        await self.conn.close()
 
 
 # ---- DB dependency -----------------------------------------------------------
