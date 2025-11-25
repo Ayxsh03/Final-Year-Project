@@ -82,7 +82,7 @@ app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), 
 # ---- CORS --------------------------------------------------------------------
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS",
-    "http://localhost:5173,http://localhost:3000,http://localhost:8080"
+    "http://localhost:5173,http://localhost:3000,http://localhost:8080,https://fpelaicctv-hrhqbecqgyb4fxd0.centralindia-01.azurewebsites.net"
 ).split(",")
 
 app.add_middleware(
@@ -112,7 +112,7 @@ async def list_odbc_drivers():
 
 @app.get("/api/v1/debug/test-db")
 async def test_db_connection_debug():
-    """Test database connection with current settings."""
+    """Test database connection and list tables."""
     try:
         conn_str = _build_connection_string(DATABASE_URL or "")
         # Mask password for safety in response
@@ -127,11 +127,17 @@ async def test_db_connection_debug():
             await cur.execute("SELECT @@VERSION")
             row = await cur.fetchone()
             version = row[0]
+            
+            # List tables
+            await cur.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'")
+            tables = [r[0] for r in await cur.fetchall()]
+            
         await conn.close()
         
         return {
             "status": "success", 
             "version": version, 
+            "tables": tables,
             "connection_string_used": safe_conn_str
         }
     except Exception as e:
