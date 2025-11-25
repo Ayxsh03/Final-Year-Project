@@ -146,6 +146,36 @@ async def test_db_connection_debug():
             "error": str(e),
             "detail": type(e).__name__
         }
+
+@app.get("/api/v1/debug/cameras")
+async def test_cameras_query():
+    """Test the cameras query directly."""
+    try:
+        conn_str = _build_connection_string(DATABASE_URL or "")
+        conn = await aioodbc.connect(dsn=conn_str)
+        wrapper = DatabaseWrapper(conn)
+        
+        query = """
+            SELECT id, name, rtsp_url, status, location
+            FROM camera_devices
+            ORDER BY CASE WHEN status = 'online' THEN 1 ELSE 0 END DESC, name
+        """
+        rows = await wrapper.fetch(query)
+        cameras = [dict(row) for row in rows]
+        
+        await wrapper.close()
+        
+        return {
+            "status": "success",
+            "count": len(cameras),
+            "cameras": cameras
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "detail": type(e).__name__
+        }
 TENANT_ID = os.getenv("AZURE_TENANT_ID", "").strip()
 CLIENT_ID = os.getenv("AZURE_CLIENT_ID", "").strip()
 CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET", "").strip()
