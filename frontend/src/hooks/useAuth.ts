@@ -1,39 +1,58 @@
 import { useState, useEffect } from "react";
-import { User, Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  role?: string;
+  auth_provider?: string;
+}
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+    // Check backend session on mount
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/v1/user', {
+          credentials: 'include', // Include cookies
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        setUser(null);
+      } finally {
         setLoading(false);
       }
-    );
+    };
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    checkAuth();
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await fetch('/logout', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      setUser(null);
+      window.location.href = '/auth';
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
   };
 
   return {
     user,
-    session,
+    session: user ? { user } : null, // Maintain compatibility
     loading,
     signOut,
   };

@@ -1,25 +1,24 @@
 import asyncio
 import aioodbc
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-
+DATABASE_URL = ("Driver={ODBC Driver 17 for SQL Server};"
+                "Server=52.172.139.167;"
+                "Database=SiteSurveillance;"
+                "Uid=Rms;"
+                "Pwd={Rms_2024@#$};"
+)
+ 
 async def test_connection():
     if not DATABASE_URL:
         print("Error: DATABASE_URL is not set.")
         return
 
-    print(f"Connecting to: {DATABASE_URL}")
+    conn_str = DATABASE_URL
+    print(f"Connecting to: {conn_str}")
+
     try:
-        # Check if it's a valid ODBC string or needs conversion (logic from main.py)
-        conn_str = DATABASE_URL
-        if ";" not in conn_str or "Driver=" not in conn_str:
-             print("Warning: DATABASE_URL does not look like an ODBC connection string.")
-        
-        conn = await aioodbc.connect(dsn=conn_str)
+        conn = await aioodbc.connect(dsn=conn_str)  # add autocommit=True if you like
         async with conn.cursor() as cur:
             await cur.execute("SELECT @@VERSION")
             row = await cur.fetchone()

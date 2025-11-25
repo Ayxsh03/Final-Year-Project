@@ -1,44 +1,20 @@
 import { useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useNotifications } from '@/contexts/NotificationContext';
+import { useToast } from './use-toast';
 
-export const useDetectionNotifications = () => {
-  const { addNotification } = useNotifications();
+/**
+ * Detection notifications hook
+ * Realtime disabled - Supabase removed
+ * TODO: Implement SSE or WebSocket for push notifications
+ */
+export function useDetectionNotifications() {
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Subscribe to new detection events
-    const channel = supabase
-      .channel('detection-notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'detection_events'
-        },
-        (payload) => {
-          const event = payload.new as any;
-          
-          // Create notification for new detection
-          addNotification({
-            type: 'detection',
-            title: 'New Person Detected',
-            message: `Person detected at ${event.camera_name} with ${Math.round(event.confidence * 100)}% confidence`,
-            data: {
-              eventId: event.id,
-              cameraId: event.camera_id,
-              cameraName: event.camera_name,
-              confidence: event.confidence,
-              timestamp: event.timestamp,
-              imagePath: event.image_path
-            }
-          });
-        }
-      )
-      .subscribe();
+    // Realtime notifications disabled
+    console.log('Detection notifications disabled - realtime feature pending implementation');
 
     return () => {
-      supabase.removeChannel(channel);
+      // No cleanup needed
     };
-  }, [addNotification]);
-};
+  }, [toast]);
+}

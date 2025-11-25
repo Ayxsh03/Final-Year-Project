@@ -33,12 +33,18 @@ jobs:
       - name: Install & build frontend
         env:
           VITE_API_BASE_URL: https://fpelaicctv-hrhqbecqgyb4fxd0.centralindia-01.azurewebsites.net
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           cd frontend
           npm ci
           npm run build
+          echo "✓ Frontend build completed"
+          echo "Verifying build output:"
+          ls -la dist/
+          if [ ! -f "dist/index.html" ]; then
+            echo "ERROR: dist/index.html not generated!"
+            exit 1
+          fi
+          echo "✓ dist/index.html verified"
           cd ..
 
       # --- Stage frontend into backend/static ---

@@ -777,10 +777,17 @@ async def send_alerts_background(event: dict):
     import requests as http
 
     try:
-        ssl_ctx = _build_ssl_context_for_db(DATABASE_URL or "")
-        conn = await asyncpg.connect(DATABASE_URL, ssl=ssl_ctx)
-        settings = await conn.fetchrow("""
-            SELECT 
+        # Connect to database using aioodbc
+        if not DATABASE_URL:
+            print("DATABASE_URL not configured, skipping alerts")
+            return
+        
+        conn_str = _build_connection_string(DATABASE_URL)
+        raw_conn = await aioodbc.connect(dsn=conn_str)
+        conn = DatabaseWrapper(raw_conn)
+        
+        settings_row = await conn.fetchrow("""
+            SELECT TOP 1
                 enabled,
                 notify_email, smtp_host, smtp_port, smtp_username, smtp_password, smtp_from, email_to,
                 notify_whatsapp, whatsapp_phone_number_id, whatsapp_token, whatsapp_to,
@@ -788,11 +795,12 @@ async def send_alerts_background(event: dict):
                 allowed_days, start_time, end_time, timezone
             FROM alert_settings
             ORDER BY updated_at DESC
-            LIMIT 1
         """)
         await conn.close()
+        
+        settings = settings_row if settings_row else None
 
-        if not settings or not settings["enabled"]:
+        if not settings or not settings.get("enabled"):
             return
 
         # Schedule guard
@@ -1794,7 +1802,7 @@ def format_report_email(report_data: dict) -> str:
 
 
 @app.get("/api/v1/reports/{period}")
-async def get_detection_report(period: str, conn: asyncpg.Connection = Depends(get_db)):
+async def get_detection_report(period: str, conn: DatabaseWrapper = Depends(get_db)):
     """Generate and return detection report for specified period."""
     if period not in ["daily", "weekly", "monthly"]:
         raise HTTPException(status_code=400, detail="Invalid period. Must be 'daily', 'weekly', or 'monthly'")
@@ -1806,7 +1814,7 @@ async def get_detection_report(period: str, conn: asyncpg.Connection = Depends(g
 
 
 @app.post("/api/v1/reports/{period}/send")
-async def send_detection_report(period: str, conn: asyncpg.Connection = Depends(get_db)):
+async def send_detection_report(period: str, conn: DatabaseWrapper = Depends(get_db)):
     """Generate and send detection report via email."""
     if period not in ["daily", "weekly", "monthly"]:
         raise HTTPException(status_code=400, detail="Invalid period. Must be 'daily', 'weekly', or 'monthly'")
@@ -1849,7 +1857,7 @@ async def send_detection_report(period: str, conn: asyncpg.Connection = Depends(
 
 
 @app.post("/api/v1/reports/scheduled/run")
-async def run_scheduled_reports(conn: asyncpg.Connection = Depends(get_db)):
+async def run_scheduled_reports(conn: DatabaseWrapper = Depends(get_db)):
     """Run scheduled reports based on settings."""
     try:
         settings = await conn.fetchrow("""
@@ -2050,8 +2058,12 @@ async def auth_callback(request: Request):
         return RedirectResponse(url=f"/auth?" + urlencode({"error": "Wrong tenant. Access denied."}), status_code=302)
     
     # Get or create profile in database
-    ssl_ctx = _build_ssl_context_for_db(DATABASE_URL or "")
-    conn = await asyncpg.connect(DATABASE_URL, ssl=ssl_ctx)
+    if not DATABASE_URL:
+        return RedirectResponse(url=f"/auth?" + urlencode({"error": "Database not configured"}), status_code=302)
+    
+    conn_str = _build_connection_string(DATABASE_URL)
+    raw_conn = await aioodbc.connect(dsn=conn_str)
+    conn = DatabaseWrapper(raw_conn)
     try:
         profile = await get_or_create_sso_profile(
             conn,
@@ -2064,7 +2076,7 @@ async def auth_callback(request: Request):
         await conn.execute(
             """
             INSERT INTO activity_logs (user_id, action, email, message, created_at)
-            VALUES ($1, $2, $3, $4, NOW())
+            VALUES (?, ?, ?, ?, SYSDATETIMEOFFSET())
             """,
             profile["id"], "logged_in", email, f"{email} logged in via Azure SSO"
         )

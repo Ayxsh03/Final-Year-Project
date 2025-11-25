@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export const Auth = () => {
@@ -19,28 +18,25 @@ export const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Intentionally do not auto-redirect away from /auth.
-  // Users can choose email/password or SSO from this page.
-
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) throw error;
-
-      await supabase.from("activity_logs").insert({
-        action: "logged in",
-        user_id: data.user?.id,
-        email: email,
-        message: `${email} logged in`,
-      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Login failed');
+      }
 
       toast({
         title: "Success",
@@ -60,23 +56,33 @@ export const Auth = () => {
     setError("");
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: fullName,
-          },
+      const response = await fetch('/api/v1/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        credentials: 'include',
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName
+        }),
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Registration failed');
+      }
 
       toast({
         title: "Success",
-        description: "Check your email for the confirmation link",
+        description: "Account created successfully. You can now sign in.",
       });
+
+      // Switch to sign in tab
+      setEmail("");
+      setPassword("");
+      setFullName("");
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -108,7 +114,7 @@ export const Auth = () => {
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -141,7 +147,7 @@ export const Auth = () => {
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? "Signing in..." : "Sign In"}
                 </Button>
-                
+
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <span className="w-full border-t" />
@@ -152,7 +158,7 @@ export const Auth = () => {
                     </span>
                   </div>
                 </div>
-                
+
                 <Button
                   type="button"
                   variant="outline"
@@ -164,7 +170,7 @@ export const Auth = () => {
                 </Button>
               </form>
             </TabsContent>
-            
+
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">

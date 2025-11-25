@@ -1,44 +1,22 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../integrations/supabase/client";
 
 /**
- * Subscribes to Supabase Realtime on detection_events and camera_devices
- * and invalidates React Query caches so UI updates instantly.
+ * Realtime sync disabled - Supabase removed.
+ * TODO: Implement Server-Sent Events (SSE) or WebSocket for realtime updates.
+ * For now, React Query will use polling intervals to keep data fresh.
  */
 export function useRealtimeSync() {
   const qc = useQueryClient();
 
   useEffect(() => {
-    const chEvents = supabase
-      .channel("realtime:detection_events")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "detection_events" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-          qc.invalidateQueries({ queryKey: ["hourly-trends"] });
-          qc.invalidateQueries({ queryKey: ["daily-trends"] });
-          qc.invalidateQueries({ queryKey: ["events"] });
-        }
-      )
-      .subscribe();
+    // Realtime subscriptions disabled
+    // Using React Query's refetchInterval for polling instead
+    console.log('Realtime sync disabled - using polling');
 
-    const chCams = supabase
-      .channel("realtime:camera_devices")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "camera_devices" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-          qc.invalidateQueries({ queryKey: ["cameras"] });
-        }
-      )
-      .subscribe();
-
+    // Cleanup function (empty for now)
     return () => {
-      supabase.removeChannel(chEvents);
-      supabase.removeChannel(chCams);
+      // No subscriptions to clean up
     };
   }, [qc]);
 }
