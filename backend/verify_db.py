@@ -1,13 +1,30 @@
 import asyncio
+import os
 import aioodbc
 
 
-DATABASE_URL = ("Driver={ODBC Driver 17 for SQL Server};"
-                "Server=52.172.139.167;"
-                "Database=SiteSurveillance;"
-                "Uid=Rms;"
-                "Pwd={Rms_2024@#$};"
+
+# Connection string - tries FreeTDS library path first, then ODBC Driver 17
+DATABASE_URL = os.getenv("DATABASE_URL") or (
+    # Option 1: Direct FreeTDS library path (works on macOS without ODBC registration)
+    "DRIVER=/opt/homebrew/lib/libtdsodbc.so;"
+    "Server=52.172.139.167;"
+    "Database=SiteSurveillance;"
+    "UID=Rms;"
+    "PWD=Rms_2024@#$;"
+    "TDS_Version=7.4;"
+    "Port=1433;"
 )
+
+# Alternative: Use ODBC Driver 17 if you have it installed
+# DATABASE_URL = (
+#     "Driver={ODBC Driver 17 for SQL Server};"
+#     "Server=52.172.139.167;"
+#     "Database=SiteSurveillance;"
+#     "Uid=Rms;"
+#     "Pwd=Rms_2024@#$;"
+# )
+
  
 async def test_connection():
     if not DATABASE_URL:
