@@ -98,6 +98,48 @@ DATABASE_URL = os.getenv("DATABASE_URL")  # e.g. postgresql://.../db?sslmode=req
 API_KEY = os.getenv("API_KEY", "111-1111-1-11-1-11-1-1")
 
 # Azure SSO Configuration
+# ... (existing config)
+
+# ---- Debug Endpoints (Temporary) ---------------------------------------------
+@app.get("/api/v1/debug/drivers")
+async def list_odbc_drivers():
+    """List all installed ODBC drivers."""
+    try:
+        drivers = pyodbc.drivers()
+        return {"drivers": drivers, "os": os.name}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/v1/debug/test-db")
+async def test_db_connection_debug():
+    """Test database connection with current settings."""
+    try:
+        conn_str = _build_connection_string(DATABASE_URL or "")
+        # Mask password for safety in response
+        safe_conn_str = conn_str
+        if "Pwd=" in safe_conn_str:
+            import re
+            safe_conn_str = re.sub(r"Pwd=([^;]+)", "Pwd=***", safe_conn_str)
+        
+        # Try connecting
+        conn = await aioodbc.connect(dsn=conn_str)
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT @@VERSION")
+            row = await cur.fetchone()
+            version = row[0]
+        await conn.close()
+        
+        return {
+            "status": "success", 
+            "version": version, 
+            "connection_string_used": safe_conn_str
+        }
+    except Exception as e:
+        return {
+            "status": "error", 
+            "error": str(e),
+            "detail": type(e).__name__
+        }
 TENANT_ID = os.getenv("AZURE_TENANT_ID", "").strip()
 CLIENT_ID = os.getenv("AZURE_CLIENT_ID", "").strip()
 CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET", "").strip()
