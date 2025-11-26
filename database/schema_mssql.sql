@@ -108,6 +108,38 @@ BEGIN
 END;
 GO
 
+-- Profiles table (for user authentication and SSO)
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'profiles')
+BEGIN
+    CREATE TABLE profiles (
+        id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+        email NVARCHAR(255) UNIQUE NOT NULL,
+        full_name NVARCHAR(255),
+        auth_provider NVARCHAR(50) DEFAULT 'email' CHECK (auth_provider IN ('email', 'azure_sso', 'supabase')),
+        azure_id NVARCHAR(255), -- Azure AD user ID for SSO
+        password_hash NVARCHAR(255), -- For email/password users (nullable for SSO)
+        role NVARCHAR(50) DEFAULT 'user' CHECK (role IN ('admin', 'operator', 'viewer', 'user')),
+        last_login DATETIMEOFFSET,
+        created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+        updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+    );
+END;
+GO
+
+-- Activity logs table (for tracking user actions)
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'activity_logs')
+BEGIN
+    CREATE TABLE activity_logs (
+        id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+        user_id UNIQUEIDENTIFIER REFERENCES profiles(id) ON DELETE SET NULL,
+        action NVARCHAR(100) NOT NULL,
+        email NVARCHAR(255),
+        message NVARCHAR(MAX),
+        created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+    );
+END;
+GO
+
 -- Indexes
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_detection_events_timestamp' AND object_id = OBJECT_ID('detection_events'))
     CREATE INDEX idx_detection_events_timestamp ON detection_events(timestamp DESC);
@@ -126,6 +158,21 @@ IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_alert_logs_event_id' 
 
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_alert_settings_updated_at' AND object_id = OBJECT_ID('alert_settings'))
     CREATE INDEX idx_alert_settings_updated_at ON alert_settings(updated_at DESC);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_profiles_email' AND object_id = OBJECT_ID('profiles'))
+    CREATE INDEX idx_profiles_email ON profiles(email);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_profiles_azure_id' AND object_id = OBJECT_ID('profiles'))
+    CREATE INDEX idx_profiles_azure_id ON profiles(azure_id);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_profiles_auth_provider' AND object_id = OBJECT_ID('profiles'))
+    CREATE INDEX idx_profiles_auth_provider ON profiles(auth_provider);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_activity_logs_user_id' AND object_id = OBJECT_ID('activity_logs'))
+    CREATE INDEX idx_activity_logs_user_id ON activity_logs(user_id);
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_activity_logs_created_at' AND object_id = OBJECT_ID('activity_logs'))
+    CREATE INDEX idx_activity_logs_created_at ON activity_logs(created_at DESC);
 GO
 
 -- Insert default settings
