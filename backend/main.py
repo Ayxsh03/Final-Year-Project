@@ -2071,21 +2071,15 @@ async def login_sso(request: Request):
     return RedirectResponse(url=auth_url, status_code=302)
 
 
-@app.route("/auth/callback", methods=["GET", "POST"])
+@app.get("/auth/callback")
 async def auth_callback(request: Request):
     """Handle OAuth2 callback from Azure AD."""
-    # Get form data or query params
-    if request.method == "POST":
-        form_data = await request.form()
-        state = form_data.get("state")
-        code = form_data.get("code")
-        error = form_data.get("error")
-        error_description = form_data.get("error_description")
-    else:
-        state = request.query_params.get("state")
-        code = request.query_params.get("code")
-        error = request.query_params.get("error")
-        error_description = request.query_params.get("error_description")
+    # OAuth callback uses query parameters
+    state = request.query_params.get("state")
+    code = request.query_params.get("code")
+    error = request.query_params.get("error")
+    error_description = request.query_params.get("error_description")
+
     
     # Validate state
     if state != request.session.get("state"):
