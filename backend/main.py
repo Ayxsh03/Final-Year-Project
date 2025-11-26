@@ -157,7 +157,7 @@ async def test_cameras_query():
         
         query = """
             SELECT id, name, rtsp_url, status, location
-            FROM camera_devices
+            FROM dbo.camera_devices
             ORDER BY CASE WHEN status = 'online' THEN 1 ELSE 0 END DESC, name
         """
         rows = await wrapper.fetch(query)
@@ -273,7 +273,7 @@ async def get_or_create_sso_profile(conn: DatabaseWrapper, email: str, full_name
     profile = await conn.fetchrow(
         """
         SELECT id, email, full_name, role, auth_provider 
-        FROM profiles 
+        FROM dbo.profiles 
         WHERE email = $1 OR (azure_id = $2 AND azure_id IS NOT NULL)
         """,
         email, azure_id
@@ -283,7 +283,7 @@ async def get_or_create_sso_profile(conn: DatabaseWrapper, email: str, full_name
         # Update last login and Azure ID if needed
         await conn.execute(
             """
-            UPDATE profiles 
+            UPDATE dbo.profiles 
             SET last_login = SYSDATETIMEOFFSET(), 
                 azure_id = COALESCE(azure_id, $1),
                 auth_provider = CASE 
@@ -306,7 +306,7 @@ async def get_or_create_sso_profile(conn: DatabaseWrapper, email: str, full_name
     
     rows = await conn.fetch(
         """
-        INSERT INTO profiles (email, full_name, auth_provider, azure_id, last_login, created_at, updated_at)
+        INSERT INTO dbo.profiles (email, full_name, auth_provider, azure_id, last_login, created_at, updated_at)
         OUTPUT inserted.id, inserted.email, inserted.full_name, inserted.role, inserted.auth_provider
         VALUES ($1, $2, 'azure_sso', $3, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())
         """,
@@ -321,7 +321,7 @@ async def get_or_create_sso_profile(conn: DatabaseWrapper, email: str, full_name
     # Log user creation
     await conn.execute(
         """
-        INSERT INTO activity_logs (user_id, action, email, message, created_at)
+        INSERT INTO dbo.activity_logs (user_id, action, email, message, created_at)
         VALUES ($1, $2, $3, $4, SYSDATETIMEOFFSET())
         """,
         new_profile["id"], "sso_profile_created", email, f"SSO profile created for {email}"
@@ -573,12 +573,12 @@ async def get_dashboard_stats(conn: DatabaseWrapper = Depends(get_db)):
         
         stats_query = """
             SELECT 
-                (SELECT COUNT(*) FROM detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as total_events,
-                (SELECT COUNT(*) FROM camera_devices) as total_cameras,
-                (SELECT COUNT(*) FROM camera_devices WHERE status = 'online') as online_cameras,
-                (SELECT COUNT(*) FROM camera_devices WHERE status = 'offline') as offline_cameras,
-                (SELECT COUNT(DISTINCT camera_id) FROM detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as active_cameras,
-                (SELECT COUNT(DISTINCT person_id) FROM detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as people_detected
+                (SELECT COUNT(*) FROM dbo.detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as total_events,
+                (SELECT COUNT(*) FROM dbo.camera_devices) as total_cameras,
+                (SELECT COUNT(*) FROM dbo.camera_devices WHERE status = 'online') as online_cameras,
+                (SELECT COUNT(*) FROM dbo.camera_devices WHERE status = 'offline') as offline_cameras,
+                (SELECT COUNT(DISTINCT camera_id) FROM dbo.detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as active_cameras,
+                (SELECT COUNT(DISTINCT person_id) FROM dbo.detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as people_detected
         """
         stats = await conn.fetchrow(stats_query)
 
@@ -589,8 +589,8 @@ async def get_dashboard_stats(conn: DatabaseWrapper = Depends(get_db)):
             END as events_trend
             FROM (
                 SELECT 
-                    (SELECT COUNT(*) FROM detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as curr_count,
-                    (SELECT COUNT(*) FROM detection_events WHERE CAST(timestamp AS DATE) = DATEADD(day, -1, CAST(SYSDATETIMEOFFSET() AS DATE))) as prev_count
+                    (SELECT COUNT(*) FROM dbo.detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as curr_count,
+                    (SELECT COUNT(*) FROM dbo.detection_events WHERE CAST(timestamp AS DATE) = DATEADD(day, -1, CAST(SYSDATETIMEOFFSET() AS DATE))) as prev_count
             ) trend_calc
         """
         events_trend = await conn.fetchval(events_trend_query)
@@ -602,8 +602,8 @@ async def get_dashboard_stats(conn: DatabaseWrapper = Depends(get_db)):
             END as devices_trend
             FROM (
                 SELECT 
-                    (SELECT COUNT(*) FROM camera_devices WHERE status = 'online') as curr_count,
-                    (SELECT COUNT(*) FROM camera_devices WHERE status = 'online' AND updated_at < DATEADD(day, -1, SYSDATETIMEOFFSET())) as prev_count
+                    (SELECT COUNT(*) FROM dbo.camera_devices WHERE status = 'online') as curr_count,
+                    (SELECT COUNT(*) FROM dbo.camera_devices WHERE status = 'online' AND updated_at < DATEADD(day, -1, SYSDATETIMEOFFSET())) as prev_count
             ) trend_calc
         """
         devices_trend = await conn.fetchval(devices_trend_query)
@@ -615,8 +615,8 @@ async def get_dashboard_stats(conn: DatabaseWrapper = Depends(get_db)):
             END as people_trend
             FROM (
                 SELECT 
-                    (SELECT COUNT(DISTINCT person_id) FROM detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as curr_count,
-                    (SELECT COUNT(DISTINCT person_id) FROM detection_events WHERE CAST(timestamp AS DATE) = DATEADD(day, -1, CAST(SYSDATETIMEOFFSET() AS DATE))) as prev_count
+                    (SELECT COUNT(DISTINCT person_id) FROM dbo.detection_events WHERE CAST(timestamp AS DATE) = CAST(SYSDATETIMEOFFSET() AS DATE)) as curr_count,
+                    (SELECT COUNT(DISTINCT person_id) FROM dbo.detection_events WHERE CAST(timestamp AS DATE) = DATEADD(day, -1, CAST(SYSDATETIMEOFFSET() AS DATE))) as prev_count
             ) trend_calc
         """
         people_trend = await conn.fetchval(people_trend_query)
@@ -650,7 +650,7 @@ async def get_people_count(
                 COUNT(DISTINCT CASE WHEN timestamp >= DATEADD(month, DATEDIFF(month, 0, SYSDATETIMEOFFSET()), 0) THEN person_id END) AS month,
                 COUNT(DISTINCT CASE WHEN timestamp >= DATEADD(year, DATEDIFF(year, 0, SYSDATETIMEOFFSET()), 0) THEN person_id END) AS year,
                 COUNT(DISTINCT person_id) AS [all]
-            FROM detection_events
+            FROM dbo.detection_events
         """
         stats = await conn.fetchrow(stats_query)
 
@@ -672,10 +672,10 @@ async def get_people_count(
                 COALESCE(c.location, '') AS location,
                 COUNT(DISTINCT d.person_id) AS count,
                 MAX(d.timestamp) AS last_detection,
-                (SELECT TOP 1 image_path FROM detection_events d2 WHERE d2.camera_id = d.camera_id ORDER BY d2.timestamp DESC) AS image_path,
-                (SELECT TOP 1 metadata FROM detection_events d2 WHERE d2.camera_id = d.camera_id ORDER BY d2.timestamp DESC) AS metadata
-            FROM detection_events d
-            LEFT JOIN camera_devices c ON d.camera_id = c.id
+                (SELECT TOP 1 image_path FROM dbo.detection_events d2 WHERE d2.camera_id = d.camera_id ORDER BY d2.timestamp DESC) AS image_path,
+                (SELECT TOP 1 metadata FROM dbo.detection_events d2 WHERE d2.camera_id = d.camera_id ORDER BY d2.timestamp DESC) AS metadata
+            FROM dbo.detection_events d
+            LEFT JOIN dbo.camera_devices c ON d.camera_id = c.id
             {where_clause}
             GROUP BY d.camera_id, d.camera_name, c.location
             ORDER BY d.camera_name
@@ -746,14 +746,14 @@ async def get_detection_events(
             elif confidence_filter == "low":
                 where_clause += " AND confidence < 0.6"
 
-        count_query = f"SELECT COUNT(*) FROM detection_events {where_clause}"
+        count_query = f"SELECT COUNT(*) FROM dbo.detection_events {where_clause}"
         total = await conn.fetchval(count_query, *params)
 
         # SQL Server pagination using OFFSET FETCH
         query = f"""
             SELECT id, timestamp, person_id, confidence, camera_name, 
                    image_path, alert_sent, metadata
-            FROM detection_events 
+            FROM dbo.detection_events 
             {where_clause}
             ORDER BY timestamp DESC 
             OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
@@ -872,7 +872,7 @@ async def send_alerts_background(event: dict):
                 notify_whatsapp, whatsapp_phone_number_id, whatsapp_token, whatsapp_to,
                 notify_telegram, telegram_bot_token, telegram_chat_id,
                 allowed_days, start_time, end_time, timezone
-            FROM alert_settings
+            FROM dbo.alert_settings
             ORDER BY updated_at DESC
         """)
         await conn.close()
@@ -973,7 +973,7 @@ async def create_detection_event(
             metadata_json = "{}"
 
         query = """
-            INSERT INTO detection_events 
+            INSERT INTO dbo.detection_events 
                 (timestamp, person_id, confidence, camera_id, camera_name, image_path, alert_sent, metadata,
                  bbox_x1, bbox_y1, bbox_x2, bbox_y2)
             OUTPUT inserted.id, inserted.timestamp, inserted.person_id, inserted.confidence, inserted.camera_id, 
@@ -1048,7 +1048,7 @@ async def get_cameras(conn: DatabaseWrapper = Depends(get_db)):
     try:
         query = """
             SELECT id, name, rtsp_url, status, location
-            FROM camera_devices
+            FROM dbo.camera_devices
             ORDER BY CASE WHEN status = 'online' THEN 1 ELSE 0 END DESC, name
         """
         rows = await conn.fetch(query)
@@ -1065,13 +1065,13 @@ async def create_camera(
 ):
     """Create a camera device (ingestion point)."""
     try:
-        exists = await conn.fetchval("SELECT 1 FROM camera_devices WHERE name = ?", camera.name)
+        exists = await conn.fetchval("SELECT 1 FROM dbo.camera_devices WHERE name = ?", camera.name)
         if exists:
             raise HTTPException(status_code=409, detail="Camera with this name already exists")
 
         row = await conn.fetchrow(
             """
-            INSERT INTO camera_devices (name, rtsp_url, status, location)
+            INSERT INTO dbo.camera_devices (name, rtsp_url, status, location)
             OUTPUT inserted.id, inserted.name, inserted.rtsp_url, inserted.status, inserted.location, inserted.created_at, inserted.updated_at
             VALUES (?, ?, 'offline', ?)
             """,
@@ -1097,13 +1097,13 @@ async def update_camera_status(
         if status not in ["online", "offline"]:
             raise HTTPException(status_code=400, detail="Status must be 'online' or 'offline'")
 
-        exists = await conn.fetchval("SELECT 1 FROM camera_devices WHERE id = ?", camera_id)
+        exists = await conn.fetchval("SELECT 1 FROM dbo.camera_devices WHERE id = ?", camera_id)
         if not exists:
             raise HTTPException(status_code=404, detail="Camera not found")
 
         await conn.execute(
             """
-            UPDATE camera_devices 
+            UPDATE dbo.camera_devices 
             SET status = ?, last_heartbeat = SYSDATETIMEOFFSET(), updated_at = SYSDATETIMEOFFSET()
             WHERE id = ?
             """,
@@ -1127,7 +1127,7 @@ async def get_hourly_data(conn: DatabaseWrapper = Depends(get_db)):
                 COUNT(*) as events,
                 COUNT(DISTINCT person_id) as footfall,
                 0 as vehicles
-            FROM detection_events 
+            FROM dbo.detection_events 
             WHERE timestamp >= DATEADD(hour, -24, SYSDATETIMEOFFSET())
             GROUP BY FORMAT(timestamp, 'HH:mm'), DATEPART(hour, timestamp)
             ORDER BY DATEPART(hour, timestamp)
@@ -1206,7 +1206,7 @@ async def stream_camera(camera_id: str, conn: DatabaseWrapper = Depends(get_db))
     """Stream RTSP camera as MJPEG for simple live preview."""
     try:
         row = await conn.fetchrow(
-            "SELECT rtsp_url, status FROM camera_devices WHERE id = ?",
+            "SELECT rtsp_url, status FROM dbo.camera_devices WHERE id = ?",
             camera_id,
         )
         if not row:
@@ -1297,7 +1297,7 @@ async def test_camera_connection(camera_id: str, conn: DatabaseWrapper = Depends
     """Test camera connectivity without streaming."""
     try:
         row = await conn.fetchrow(
-            "SELECT rtsp_url, status FROM camera_devices WHERE id = ?",
+            "SELECT rtsp_url, status FROM dbo.camera_devices WHERE id = ?",
             camera_id,
         )
         if not row:
@@ -1365,12 +1365,12 @@ async def update_camera_rtsp(
         if not rtsp_url:
             raise HTTPException(status_code=400, detail="rtsp_url is required")
 
-        exists = await conn.fetchval("SELECT 1 FROM camera_devices WHERE id = ?", camera_id)
+        exists = await conn.fetchval("SELECT 1 FROM dbo.camera_devices WHERE id = ?", camera_id)
         if not exists:
             raise HTTPException(status_code=404, detail="Camera not found")
 
         await conn.execute(
-            "UPDATE camera_devices SET rtsp_url = ?, updated_at = SYSDATETIMEOFFSET() WHERE id = ?",
+            "UPDATE dbo.camera_devices SET rtsp_url = ?, updated_at = SYSDATETIMEOFFSET() WHERE id = ?",
             rtsp_url, camera_id
         )
         return {"message": "RTSP URL updated successfully", "rtsp_url": rtsp_url}
@@ -1393,7 +1393,7 @@ async def get_alert_settings(conn: DatabaseWrapper = Depends(get_db)):
                    daily_report_enabled, weekly_report_enabled, monthly_report_enabled,
                    notify_vip_email, notify_regular_email, notify_attendance_to_branch,
                    google_places_api_key, created_at, updated_at
-            FROM alert_settings 
+            FROM dbo.alert_settings 
             ORDER BY updated_at DESC 
         """
         row = await conn.fetchrow(query)
@@ -1446,7 +1446,7 @@ async def update_alert_settings(
     """Update alert settings (upsert)."""
     try:
         existing = await conn.fetchrow(
-            "SELECT TOP 1 id FROM alert_settings ORDER BY updated_at DESC"
+            "SELECT TOP 1 id FROM dbo.alert_settings ORDER BY updated_at DESC"
         )
 
         if existing:
@@ -1463,7 +1463,7 @@ async def update_alert_settings(
             if update_fields:
                 params.append(existing["id"])
                 query = f"""
-                    UPDATE alert_settings 
+                    UPDATE dbo.alert_settings 
                     SET {', '.join(update_fields)}, updated_at = SYSDATETIMEOFFSET()
                     OUTPUT inserted.*
                     WHERE id = ?
@@ -1471,7 +1471,7 @@ async def update_alert_settings(
                 row = await conn.fetchrow(query, *params)
             else:
                 row = await conn.fetchrow(
-                    "SELECT * FROM alert_settings WHERE id = ?", existing["id"]
+                    "SELECT * FROM dbo.alert_settings WHERE id = ?", existing["id"]
                 )
         else:
             data = settings.model_dump(exclude_unset=True)
@@ -1502,7 +1502,7 @@ async def update_alert_settings(
             placeholders = ["?" for _ in range(len(values))]
 
             query = f"""
-                INSERT INTO alert_settings ({', '.join(columns)})
+                INSERT INTO dbo.alert_settings ({', '.join(columns)})
                 OUTPUT inserted.*
                 VALUES ({', '.join(placeholders)})
             """
@@ -1684,7 +1684,7 @@ async def generate_detection_report(period: str, conn: DatabaseWrapper) -> dict:
                 AVG(confidence) as avg_confidence,
                 MIN(timestamp) as first_detection,
                 MAX(timestamp) as last_detection
-            FROM detection_events 
+            FROM dbo.detection_events 
             WHERE {date_filter}
         """
         stats = await conn.fetchrow(stats_query)
@@ -1697,8 +1697,8 @@ async def generate_detection_report(period: str, conn: DatabaseWrapper) -> dict:
                 COUNT(DISTINCT d.person_id) as unique_people,
                 AVG(d.confidence) as avg_confidence,
                 MAX(d.timestamp) as last_detection
-            FROM detection_events d
-            LEFT JOIN camera_devices c ON d.camera_id = c.id
+            FROM dbo.detection_events d
+            LEFT JOIN dbo.camera_devices c ON d.camera_id = c.id
             WHERE {date_filter}
             GROUP BY d.camera_name, c.location
             ORDER BY detection_count DESC
@@ -1710,7 +1710,7 @@ async def generate_detection_report(period: str, conn: DatabaseWrapper) -> dict:
                 DATEPART(HOUR, timestamp) as hour,
                 COUNT(*) as detections,
                 COUNT(DISTINCT person_id) as unique_people
-            FROM detection_events 
+            FROM dbo.detection_events 
             WHERE {date_filter}
             GROUP BY DATEPART(HOUR, timestamp)
             ORDER BY hour
@@ -1725,7 +1725,7 @@ async def generate_detection_report(period: str, conn: DatabaseWrapper) -> dict:
                     ELSE 'Low (<70%)'
                 END as confidence_range,
                 COUNT(*) as count
-            FROM detection_events 
+            FROM dbo.detection_events 
             WHERE {date_filter}
             GROUP BY CASE 
                     WHEN confidence >= 0.9 THEN 'High (90%+)'
@@ -1901,7 +1901,7 @@ async def send_detection_report(period: str, conn: DatabaseWrapper = Depends(get
     try:
         settings = await conn.fetchrow("""
             SELECT TOP 1 notify_email, smtp_host, smtp_port, smtp_username, smtp_password, smtp_from, email_to
-            FROM alert_settings
+            FROM dbo.alert_settings
             ORDER BY updated_at DESC
         """)
 
@@ -1942,7 +1942,7 @@ async def run_scheduled_reports(conn: DatabaseWrapper = Depends(get_db)):
         settings = await conn.fetchrow("""
             SELECT TOP 1 daily_report_enabled, weekly_report_enabled, monthly_report_enabled,
                    notify_email, smtp_host, smtp_port, smtp_username, smtp_password, smtp_from, email_to
-            FROM alert_settings
+            FROM dbo.alert_settings
             ORDER BY updated_at DESC
         """)
 
@@ -2148,7 +2148,7 @@ async def auth_callback(request: Request):
         # Log login activity
         await conn.execute(
             """
-            INSERT INTO activity_logs (user_id, action, email, message, created_at)
+            INSERT INTO dbo.activity_logs (user_id, action, email, message, created_at)
             VALUES (?, ?, ?, ?, SYSDATETIMEOFFSET())
             """,
             profile["id"], "logged_in", email, f"{email} logged in via Azure SSO"
