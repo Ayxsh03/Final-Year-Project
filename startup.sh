@@ -98,11 +98,41 @@ python -c "import cv2; print(f'OpenCV {cv2.__version__} imported successfully')"
 echo "OpenCV packages:"
 python -m pip list | grep -i opencv || true
 
-# Try to start the app
+# Start detection worker in background
+echo "========================================"
+echo "Starting Detection Worker..."
+echo "========================================"
+
+# Function to run detection worker loop
+run_detection_worker() {
+    echo "Detection worker started with PID $$"
+    
+    # Export detection-specific env vars if not set
+    export API_BASE_URL=${API_BASE_URL:-http://localhost:8000/api/v1}
+    export API_KEY=${API_KEY:-111-1111-1-11-1-11-1-1}
+    export IMAGES_DIR=${IMAGES_DIR:-/home/images}
+    
+    # Wait for backend to be ready
+    echo "Waiting for backend to start..."
+    sleep 10
+    
+    while true; do
+        echo "Starting multi_camera_detector.py..."
+        python -u detection_integration/multi_camera_detector.py >> /home/logs/detection.log 2>&1
+        
+        EXIT_CODE=$?
+        echo "Detection worker exited with code $EXIT_CODE. Restarting in 5 seconds..."
+        sleep 5
+    done
+}
+
+# Start the worker in background
+run_detection_worker &
+
+# Start uvicorn - let it handle errors
 echo "========================================"
 echo "Starting FastAPI application..."
 echo "Command: python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000"
 echo "========================================"
 
-# Start uvicorn - let it handle errors
 exec python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --log-level info
